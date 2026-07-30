@@ -81,7 +81,9 @@ export class AdminService {
       prisma.impressionEvent.count({
         where: { ...eventScope, ...(period ? { shown_at: period } : {}) },
       }),
-      prisma.scanEvent.count({ where: { ...eventScope, ...(period ? { scanned_at: period } : {}) } }),
+      prisma.scanEvent.count({
+        where: { ...eventScope, ...(period ? { scanned_at: period } : {}) },
+      }),
       prisma.scanEvent.count({
         where: { ...eventScope, is_unique: true, ...(period ? { scanned_at: period } : {}) },
       }),
@@ -98,7 +100,8 @@ export class AdminService {
       }),
     ]);
 
-    const pct = (num: number, den: number) => (den > 0 ? Number(((num / den) * 100).toFixed(2)) : 0);
+    const pct = (num: number, den: number) =>
+      den > 0 ? Number(((num / den) * 100).toFixed(2)) : 0;
 
     return {
       totals: {
@@ -352,7 +355,9 @@ export class AdminService {
           total_investment: true,
           created_at: true,
           anunciante: { select: { company_name: true, trade_name: true } },
-          _count: { select: { motoristas: true, scan_events: true, leads: true, impression_events: true } },
+          _count: {
+            select: { motoristas: true, scan_events: true, leads: true, impression_events: true },
+          },
         },
       }),
     ]);
@@ -473,7 +478,11 @@ export class AdminService {
       skipDuplicates: true,
     });
 
-    return { assigned: escolhidos.length, candidates: elegiveis.length, vagasRestantes: vagas - escolhidos.length };
+    return {
+      assigned: escolhidos.length,
+      candidates: elegiveis.length,
+      vagasRestantes: vagas - escolhidos.length,
+    };
   }
 
   /** MASTER força uma campanha no tablet de um motorista, ou bloqueia. */

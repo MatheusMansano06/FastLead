@@ -43,7 +43,7 @@ export class QRService {
       return { qrCodeData: qrUrl, qrCodeImageUrl: qrCodeImage };
     } catch (error) {
       logger.error(`Erro ao gerar QR code: ${error}`);
-      throw new Error('Falha ao gerar QR code');
+      throw new Error('Falha ao gerar QR code', { cause: error });
     }
   }
 
@@ -57,7 +57,7 @@ export class QRService {
       });
     } catch (error) {
       logger.error(`Erro ao gerar arquivo QR code: ${error}`);
-      throw new Error('Falha ao gerar arquivo QR code');
+      throw new Error('Falha ao gerar arquivo QR code', { cause: error });
     }
   }
 

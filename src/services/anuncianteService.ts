@@ -195,11 +195,7 @@ export class AnuncianteService {
     const campaignsWithMetrics = campaigns.map((campaign: any) => {
       const roi =
         campaign.total_investment.toNumber() > 0
-          ? (
-              (campaign.conversions /
-                Math.max(campaign.total_leads, 1)) *
-              100
-            ).toFixed(2)
+          ? ((campaign.conversions / Math.max(campaign.total_leads, 1)) * 100).toFixed(2)
           : '0';
 
       return {
@@ -366,9 +362,8 @@ export class AnuncianteService {
         leadPhone: lead.user.email,
         device: lead.user_device,
         ipAddress: lead.ip_address,
-        location: lead.latitude && lead.longitude
-          ? { lat: lead.latitude, lng: lead.longitude }
-          : null,
+        location:
+          lead.latitude && lead.longitude ? { lat: lead.latitude, lng: lead.longitude } : null,
         scannedAt: lead.qr_scan_time,
         convertedAt: lead.converted_at,
         conversionValue: lead.conversion_value?.toString(),
@@ -385,11 +380,7 @@ export class AnuncianteService {
   /**
    * Get campaign details with analytics
    */
-  static async getCampaignDetails(
-    _userId: string,
-    companyId: string,
-    campaignId: string
-  ) {
+  static async getCampaignDetails(_userId: string, companyId: string, campaignId: string) {
     const campaign = await prisma.campaign.findUnique({
       where: { id: campaignId },
       include: {
@@ -433,8 +424,7 @@ export class AnuncianteService {
     const roi =
       campaign.total_investment.toNumber() > 0
         ? (
-            (campaign.conversions /
-              Math.max(campaign.total_investment.toNumber(), 1)) *
+            (campaign.conversions / Math.max(campaign.total_investment.toNumber(), 1)) *
             100
           ).toFixed(2)
         : '0';

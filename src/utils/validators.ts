@@ -11,9 +11,7 @@ import {
 export const RegisterSchema = z
   .object({
     email: z.string().email('E-mail inválido'),
-    password: z
-      .string()
-      .refine(isStrongPassword, 'A senha não atende às regras de segurança'),
+    password: z.string().refine(isStrongPassword, 'A senha não atende às regras de segurança'),
     type: z.enum([UserType.DRIVER, UserType.ADVERTISER, UserType.ADMIN]),
     fullName: z.string().min(3, 'Informe o nome completo'),
     phone: z.string().refine(isValidPhoneBR, 'Telefone com DDD inválido'),
@@ -46,8 +44,7 @@ export const RegisterSchema = z
     if (data.type === UserType.DRIVER) {
       if (!data.cpf || !isValidCPF(data.cpf))
         ctx.addIssue({ code: 'custom', path: ['cpf'], message: 'CPF inválido' });
-      if (!data.city)
-        ctx.addIssue({ code: 'custom', path: ['city'], message: 'Informe a cidade' });
+      if (!data.city) ctx.addIssue({ code: 'custom', path: ['city'], message: 'Informe a cidade' });
       if (!data.vehicle)
         ctx.addIssue({ code: 'custom', path: ['vehicle'], message: 'Informe o veículo' });
       if (!data.plate || !isValidPlate(data.plate))

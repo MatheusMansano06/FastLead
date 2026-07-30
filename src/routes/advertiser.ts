@@ -40,10 +40,7 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     logger.info(`Advertiser profile requested by ${req.user?.id}`);
 
-    const profile = await AnuncianteService.getProfile(
-      req.user!.id,
-      req.user!.companyId!
-    );
+    const profile = await AnuncianteService.getProfile(req.user!.id, req.user!.companyId!);
 
     res.status(200).json({
       message: 'Advertiser profile retrieved',
@@ -113,7 +110,8 @@ router.post(
       return;
     }
 
-    const asArray = (v: unknown): string[] => (Array.isArray(v) ? v.filter(Boolean).map(String) : []);
+    const asArray = (v: unknown): string[] =>
+      Array.isArray(v) ? v.filter(Boolean).map(String) : [];
 
     const campaign = await AnuncianteService.createCampaign(req.user!.id, req.user!.companyId!, {
       title,
@@ -180,7 +178,11 @@ router.delete(
   authorize(UserType.ADVERTISER),
   asyncHandler(async (req: Request, res: Response) => {
     const campaignId = String(req.params.campaignId);
-    const result = await AnuncianteService.deleteCampaign(req.user!.id, req.user!.companyId!, campaignId);
+    const result = await AnuncianteService.deleteCampaign(
+      req.user!.id,
+      req.user!.companyId!,
+      campaignId
+    );
     res.status(200).json({ message: 'Campanha deletada', data: result });
   })
 );

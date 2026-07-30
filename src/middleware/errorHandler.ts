@@ -10,15 +10,9 @@ export const errorHandler = (
   res: Response,
   _next: NextFunction
 ): void => {
-  let statusCode = 500;
-  let message = 'Internal server error';
-
-  if (error instanceof AppError) {
-    statusCode = error.statusCode;
-    message = error.message;
-  } else {
-    message = error.message || 'Internal server error';
-  }
+  const isAppError = error instanceof AppError;
+  const statusCode = isAppError ? error.statusCode : 500;
+  const message = error.message || 'Internal server error';
 
   logger.error(`Error: ${message}`, error);
 

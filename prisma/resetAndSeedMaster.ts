@@ -25,13 +25,22 @@ import { hashPassword } from '../src/utils/password';
 const prisma = new PrismaClient();
 
 const MASTER_EMAIL = process.env.MASTER_EMAIL || 'master@fastlead.com.br';
-const MASTER_PASSWORD = process.env.MASTER_PASSWORD || 'Master@2026';
 const MASTER_NAME = process.env.MASTER_NAME || 'FastLead Master';
+// Sem valor padrão de propósito: uma senha de admin escrita aqui vale para
+// qualquer ambiente onde o seed rodar, inclusive produção.
+const MASTER_PASSWORD = process.env.MASTER_PASSWORD;
 
 async function main() {
   if (process.env.CONFIRM_WIPE !== 'SIM') {
     console.error('\n  Recusando apagar sem confirmação explícita.');
     console.error('  Rode com CONFIRM_WIPE=SIM se é isso mesmo que você quer.\n');
+    process.exit(1);
+  }
+
+  if (!MASTER_PASSWORD) {
+    console.error('\n  MASTER_PASSWORD não definida.');
+    console.error('  Defina a senha do usuário MASTER no ambiente antes de rodar:\n');
+    console.error('    MASTER_PASSWORD="..." CONFIRM_WIPE=SIM npm run db:reset:master\n');
     process.exit(1);
   }
 

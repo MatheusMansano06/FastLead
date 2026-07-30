@@ -14,9 +14,7 @@ export class PaymentService {
   /**
    * Calculate motorista earnings
    */
-  static async calculateMotoristaEarnings(
-    motoristaId: string
-  ): Promise<MotoristaEarnings> {
+  static async calculateMotoristaEarnings(motoristaId: string): Promise<MotoristaEarnings> {
     const motorista = await prisma.motoristProfile.findUnique({
       where: { id: motoristaId },
     });
@@ -74,10 +72,7 @@ export class PaymentService {
       today: calculateEarnings(todayLeads),
       leadsCount: allLeads.length,
       conversionsCount: allLeads.filter((l: any) => l.status === 'CONVERTED').length,
-      averagePerLead:
-        allLeads.length > 0
-          ? calculateEarnings(allLeads) / allLeads.length
-          : 0,
+      averagePerLead: allLeads.length > 0 ? calculateEarnings(allLeads) / allLeads.length : 0,
     };
   }
 }

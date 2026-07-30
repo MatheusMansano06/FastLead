@@ -325,8 +325,7 @@ export class AuthService {
       type: userType,
       companyId: user.company_id,
       isActive: user.is_active,
-      profile:
-        userType === 'driver' ? user.motorista_profile : user.anunciante_profile,
+      profile: userType === 'driver' ? user.motorista_profile : user.anunciante_profile,
     };
   }
 }

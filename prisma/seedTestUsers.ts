@@ -88,7 +88,12 @@ async function main() {
 
   // ── Motorista ──
   const motoristaCompany = await prisma.company.create({
-    data: { name: MOTORISTA.fullName, email: MOTORISTA.email, phone: MOTORISTA.phone, status: 'active' },
+    data: {
+      name: MOTORISTA.fullName,
+      email: MOTORISTA.email,
+      phone: MOTORISTA.phone,
+      status: 'active',
+    },
   });
   const motoristaUser = await prisma.user.create({
     data: {

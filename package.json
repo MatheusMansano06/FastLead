@@ -7,10 +7,11 @@
     "dev": "nodemon --exec ts-node src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "lint": "eslint src --ext .ts",
-    "lint:fix": "eslint src --ext .ts --fix",
-    "format": "prettier --write \"src/**/*.ts\"",
-    "format:check": "prettier --check \"src/**/*.ts\"",
+    "lint": "eslint src prisma",
+    "lint:fix": "eslint src prisma --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"prisma/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"prisma/**/*.ts\"",
+    "check": "npm run format:check && npm run lint && tsc --noEmit",
     "test": "echo \"Error: no test specified\" && exit 1",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
@@ -50,6 +51,7 @@
   },
   "devDependencies": {
     "@dietrichgebert/ponytail": "github:DietrichGebert/ponytail",
+    "@eslint/js": "^10.0.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
@@ -59,10 +61,12 @@
     "@typescript-eslint/eslint-plugin": "^8.63.0",
     "@typescript-eslint/parser": "^8.63.0",
     "eslint": "^10.6.0",
+    "globals": "^17.8.0",
     "nodemon": "^3.1.14",
     "prettier": "^3.9.5",
     "prisma": "^5.19.0",
     "ts-node": "^10.9.2",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.65.0"
   }
 }

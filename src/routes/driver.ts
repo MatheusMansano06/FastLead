@@ -68,10 +68,7 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     logger.info(`Driver profile requested by ${req.user?.id}`);
 
-    const profile = await MotoristaService.getProfile(
-      req.user!.id,
-      req.user!.companyId!
-    );
+    const profile = await MotoristaService.getProfile(req.user!.id, req.user!.companyId!);
 
     res.status(200).json({
       message: 'Driver profile retrieved',
@@ -91,10 +88,7 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     logger.info(`Earnings requested by driver ${req.user?.id}`);
 
-    const earnings = await MotoristaService.getEarnings(
-      req.user!.id,
-      req.user!.companyId!
-    );
+    const earnings = await MotoristaService.getEarnings(req.user!.id, req.user!.companyId!);
 
     res.status(200).json({
       message: 'Earnings retrieved',
@@ -114,10 +108,7 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     logger.info(`Campaigns requested by driver ${req.user?.id}`);
 
-    const campaigns = await MotoristaService.getCampaigns(
-      req.user!.id,
-      req.user!.companyId!
-    );
+    const campaigns = await MotoristaService.getCampaigns(req.user!.id, req.user!.companyId!);
 
     res.status(200).json({
       message: 'Campaigns retrieved',
@@ -265,11 +256,7 @@ router.patch(
       return;
     }
 
-    const updated = await MotoristaService.updateStatus(
-      req.user!.id,
-      req.user!.companyId!,
-      status
-    );
+    const updated = await MotoristaService.updateStatus(req.user!.id, req.user!.companyId!, status);
 
     res.status(200).json({
       message: 'Status updated successfully',

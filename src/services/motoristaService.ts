@@ -75,47 +75,46 @@ export class MotoristaService {
     todayStart.setHours(0, 0, 0, 0);
 
     // Get earnings from payments
-    const [, monthEarnings, weekEarnings, todayEarnings] =
-      await Promise.all([
-        // Total earnings (from motorista_profile)
-        prisma.motoristProfile.findUnique({
-          where: { id: motorista.id },
-          select: { total_earnings: true },
-        }),
+    const [, monthEarnings, weekEarnings, todayEarnings] = await Promise.all([
+      // Total earnings (from motorista_profile)
+      prisma.motoristProfile.findUnique({
+        where: { id: motorista.id },
+        select: { total_earnings: true },
+      }),
 
-        // Month earnings
-        prisma.payment.aggregate({
-          where: {
-            motorista_id: motorista.id,
-            company_id: companyId,
-            period_start: { gte: monthStart },
-            status: 'COMPLETED',
-          },
-          _sum: { amount: true },
-        }),
+      // Month earnings
+      prisma.payment.aggregate({
+        where: {
+          motorista_id: motorista.id,
+          company_id: companyId,
+          period_start: { gte: monthStart },
+          status: 'COMPLETED',
+        },
+        _sum: { amount: true },
+      }),
 
-        // Week earnings
-        prisma.payment.aggregate({
-          where: {
-            motorista_id: motorista.id,
-            company_id: companyId,
-            period_start: { gte: weekStart },
-            status: 'COMPLETED',
-          },
-          _sum: { amount: true },
-        }),
+      // Week earnings
+      prisma.payment.aggregate({
+        where: {
+          motorista_id: motorista.id,
+          company_id: companyId,
+          period_start: { gte: weekStart },
+          status: 'COMPLETED',
+        },
+        _sum: { amount: true },
+      }),
 
-        // Today earnings
-        prisma.payment.aggregate({
-          where: {
-            motorista_id: motorista.id,
-            company_id: companyId,
-            period_start: { gte: todayStart },
-            status: 'COMPLETED',
-          },
-          _sum: { amount: true },
-        }),
-      ]);
+      // Today earnings
+      prisma.payment.aggregate({
+        where: {
+          motorista_id: motorista.id,
+          company_id: companyId,
+          period_start: { gte: todayStart },
+          status: 'COMPLETED',
+        },
+        _sum: { amount: true },
+      }),
+    ]);
 
     // Get earnings by campaign
     const campaignEarnings = await prisma.payment.groupBy({
@@ -225,7 +224,7 @@ export class MotoristaService {
           scans: cm.scans_count,
           leads: leadsCount,
           earnings: (
-            leadsCount * (parseFloat(cm.campaign.price_per_lead?.toString() || '0'))
+            leadsCount * parseFloat(cm.campaign.price_per_lead?.toString() || '0')
           ).toString(),
         };
       })

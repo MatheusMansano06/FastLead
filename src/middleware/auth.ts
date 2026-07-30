@@ -5,6 +5,9 @@ import { AuthPayload, UserType } from '../types';
 import logger from '../config/logger';
 
 declare global {
+  // Namespace é a forma que o Express expõe para estender o tipo Request;
+  // não há equivalente em módulos ES aqui.
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       user?: AuthPayload;

@@ -139,7 +139,7 @@ async function main() {
       vehicle_info: 'Toyota Prius 2022 - Hybrid',
       license_plate: 'ABC-1234',
       phone: '+55 11 99876-5432',
-      total_earnings: 1250.50,
+      total_earnings: 1250.5,
       status: 'ATIVO',
       last_online_at: new Date(),
       bank_account: '12345-6 / 0000000123456-7',
@@ -263,7 +263,7 @@ async function main() {
     },
   });
 
-  const campaign3 = await prisma.campaign.create({
+  await prisma.campaign.create({
     data: {
       company_id: fastleadCompany.id,
       anunciante_id: anuncianteProfile1.id,
