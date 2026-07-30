@@ -24,7 +24,7 @@ export const errorHandler = (
   };
 
   if (config.env === 'development') {
-    (errorResponse as any).stack = error.stack;
+    errorResponse.stack = error.stack;
   }
 
   res.status(statusCode).json(errorResponse);

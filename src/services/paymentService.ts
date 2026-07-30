@@ -45,20 +45,23 @@ export class PaymentService {
       },
     });
 
+    // O tipo vem do include da query acima; anotar o parâmetro descartaria isso.
+    type LeadComCampanha = (typeof allLeads)[number];
+
     const currentMonthLeads = allLeads.filter(
-      (l: any) => l.converted_at && new Date(l.converted_at) >= monthStart
+      (l) => l.converted_at && new Date(l.converted_at) >= monthStart
     );
 
     const last7DaysLeads = allLeads.filter(
-      (l: any) => l.converted_at && new Date(l.converted_at) >= weekStart
+      (l) => l.converted_at && new Date(l.converted_at) >= weekStart
     );
 
     const todayLeads = allLeads.filter(
-      (l: any) => l.converted_at && new Date(l.converted_at) >= todayStart
+      (l) => l.converted_at && new Date(l.converted_at) >= todayStart
     );
 
-    const calculateEarnings = (leads: any[]) => {
-      return leads.reduce((total, lead: any) => {
+    const calculateEarnings = (leads: LeadComCampanha[]): number => {
+      return leads.reduce((total, lead) => {
         const pricePerLead = lead.campaign.price_per_lead?.toNumber() || 0;
         // 70% to motorista, 30% to platform
         return total + pricePerLead * 0.7;
@@ -71,7 +74,7 @@ export class PaymentService {
       last7Days: calculateEarnings(last7DaysLeads),
       today: calculateEarnings(todayLeads),
       leadsCount: allLeads.length,
-      conversionsCount: allLeads.filter((l: any) => l.status === 'CONVERTED').length,
+      conversionsCount: allLeads.filter((l) => l.status === 'CONVERTED').length,
       averagePerLead: allLeads.length > 0 ? calculateEarnings(allLeads) / allLeads.length : 0,
     };
   }

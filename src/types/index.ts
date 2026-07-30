@@ -56,6 +56,8 @@ export interface ErrorResponse {
   message: string;
   statusCode: number;
   timestamp: string;
+  /** Só preenchido em desenvolvimento — nunca vaza stack trace em produção. */
+  stack?: string;
 }
 
 export interface PaginationParams {

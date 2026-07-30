@@ -36,7 +36,8 @@
     "typescript"
   ],
   "author": "FastLead Team",
-  "license": "MIT",
+  "license": "UNLICENSED",
+  "private": true,
   "type": "commonjs",
   "dependencies": {
     "@prisma/client": "^5.19.0",

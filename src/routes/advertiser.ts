@@ -23,7 +23,7 @@ router.get(
 );
 
 // Helper to safely get query strings
-const getQueryString = (value: any): string | undefined => {
+const getQueryString = (value: unknown): string | undefined => {
   if (typeof value === 'string') return value;
   if (Array.isArray(value)) return value[0];
   return undefined;

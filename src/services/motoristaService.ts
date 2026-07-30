@@ -129,8 +129,8 @@ export class MotoristaService {
 
     const campaignDetails = await Promise.all(
       campaignEarnings
-        .filter((ce: any) => ce.campaign_id !== null)
-        .map(async (ce: any) => {
+        .filter((ce) => ce.campaign_id !== null)
+        .map(async (ce) => {
           const campaign = await prisma.campaign.findUnique({
             where: { id: ce.campaign_id! },
             select: {
@@ -202,7 +202,7 @@ export class MotoristaService {
 
     // Get leads count for each campaign
     const campaignData = await Promise.all(
-      campaigns.map(async (cm: any) => {
+      campaigns.map(async (cm) => {
         const leadsCount = await prisma.lead.count({
           where: {
             campaign_id: cm.campaign_id,
@@ -412,7 +412,7 @@ export class MotoristaService {
     ]);
 
     return {
-      payments: payments.map((p: any) => ({
+      payments: payments.map((p) => ({
         id: p.id,
         amount: p.amount.toString(),
         status: p.status,

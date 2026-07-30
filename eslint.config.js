@@ -24,9 +24,11 @@ module.exports = tseslint.config(
     // brigarem pelo mesmo arquivo. Aqui ficam apenas regras de qualidade.
     rules: {
       '@typescript-eslint/no-explicit-any': 'warn',
-      // A regra do .eslintrc antigo estava no plural ('...return-types') e por
-      // isso era ignorada em silêncio.
-      '@typescript-eslint/explicit-function-return-type': 'warn',
+      // Desligada de propósito. A camada de serviço devolve tipos que o Prisma
+      // gera a partir de cada include/select; anotá-los à mão significa copiar
+      // estruturas aninhadas que mudam junto com o schema. A inferência do TS
+      // é exata aqui e não sai de sincronia — a anotação sairia.
+      '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/no-unused-vars': [
         'error',
         // `catch (error)` sem usar a variável é intencional em vários pontos.

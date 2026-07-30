@@ -192,7 +192,7 @@ export class AnuncianteService {
     });
 
     // Calculate ROI for each campaign
-    const campaignsWithMetrics = campaigns.map((campaign: any) => {
+    const campaignsWithMetrics = campaigns.map((campaign) => {
       const roi =
         campaign.total_investment.toNumber() > 0
           ? ((campaign.conversions / Math.max(campaign.total_leads, 1)) * 100).toFixed(2)
