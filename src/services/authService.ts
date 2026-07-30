@@ -6,8 +6,9 @@ import {
   ConflictError,
   NotFoundError,
   ValidationError,
+  isPrismaKnownError,
 } from '../utils/errors';
-import { AuthResponse, RegisterPayload, LoginPayload, AuthPayload } from '../types';
+import { AuthResponse, RegisterPayload, LoginPayload, AuthPayload, UserType } from '../types';
 import logger from '../config/logger';
 
 // Blacklist for revoked refresh tokens (in production, use Redis)
@@ -20,13 +21,16 @@ const refreshTokenBlacklist: Set<string> = new Set();
  * as rotas /admin. Mapeamento explícito para o caso ADMIN não se perder de novo.
  */
 const USER_TYPE_TO_TOKEN = {
-  MOTORISTA: 'driver',
-  ANUNCIANTE: 'advertiser',
-  ADMIN: 'admin',
+  MOTORISTA: UserType.DRIVER,
+  ANUNCIANTE: UserType.ADVERTISER,
+  ADMIN: UserType.ADMIN,
 } as const;
 
-function tokenTypeFor(dbType: keyof typeof USER_TYPE_TO_TOKEN | string): string {
-  return USER_TYPE_TO_TOKEN[dbType as keyof typeof USER_TYPE_TO_TOKEN] ?? 'advertiser';
+// Devolve UserType, e não string: com string, todo ponto de uso precisava de um
+// cast para montar o AuthPayload, e o cast escondia justamente o erro de mapeamento
+// descrito acima.
+function tokenTypeFor(dbType: string): UserType {
+  return USER_TYPE_TO_TOKEN[dbType as keyof typeof USER_TYPE_TO_TOKEN] ?? UserType.ADVERTISER;
 }
 
 export class AuthService {
@@ -133,7 +137,7 @@ export class AuthService {
       const authPayload: AuthPayload = {
         id: user.id,
         email: user.email,
-        type: type as any,
+        type,
         companyId: finalCompanyId,
       };
 
@@ -146,12 +150,12 @@ export class AuthService {
         user: {
           id: user.id,
           email: user.email,
-          type: type as any,
+          type,
           companyId: finalCompanyId,
         },
       };
-    } catch (error: any) {
-      if (error.code === 'P2002') {
+    } catch (error: unknown) {
+      if (isPrismaKnownError(error) && error.code === 'P2002') {
         const target = Array.isArray(error.meta?.target)
           ? error.meta.target.join(',')
           : String(error.meta?.target || '');
@@ -201,7 +205,7 @@ export class AuthService {
     const authPayload: AuthPayload = {
       id: user.id,
       email: user.email,
-      type: userType as any,
+      type: userType,
       companyId: user.company_id,
     };
 
@@ -214,7 +218,7 @@ export class AuthService {
       user: {
         id: user.id,
         email: user.email,
-        type: userType as any,
+        type: userType,
         companyId: user.company_id,
       },
     };
@@ -253,7 +257,7 @@ export class AuthService {
     const authPayload: AuthPayload = {
       id: user.id,
       email: user.email,
-      type: userType as any,
+      type: userType,
       companyId: user.company_id,
     };
 
@@ -266,7 +270,7 @@ export class AuthService {
       user: {
         id: user.id,
         email: user.email,
-        type: userType as any,
+        type: userType,
         companyId: user.company_id,
       },
     };
@@ -325,8 +329,7 @@ export class AuthService {
       type: userType,
       companyId: user.company_id,
       isActive: user.is_active,
-      profile:
-        userType === 'driver' ? user.motorista_profile : user.anunciante_profile,
+      profile: userType === 'driver' ? user.motorista_profile : user.anunciante_profile,
     };
   }
 }

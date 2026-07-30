@@ -3,15 +3,23 @@ import config from '../config/config';
 import { AuthPayload } from '../types';
 
 export const generateToken = (payload: AuthPayload): string => {
-  return jwt.sign(payload, config.jwt.secret as string, {
-    expiresIn: config.jwt.expiresIn,
-  } as any);
+  return jwt.sign(
+    payload,
+    config.jwt.secret as string,
+    {
+      expiresIn: config.jwt.expiresIn,
+    } as any
+  );
 };
 
 export const generateRefreshToken = (payload: AuthPayload): string => {
-  return jwt.sign(payload, config.jwt.refreshSecret as string, {
-    expiresIn: config.jwt.refreshExpiresIn,
-  } as any);
+  return jwt.sign(
+    payload,
+    config.jwt.refreshSecret as string,
+    {
+      expiresIn: config.jwt.refreshExpiresIn,
+    } as any
+  );
 };
 
 export const verifyToken = (token: string): AuthPayload | null => {

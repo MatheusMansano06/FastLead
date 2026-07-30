@@ -34,11 +34,19 @@ router.get(
       clearTimeout(timeout);
 
       if (resp.status === 404) {
-        res.status(200).json({ data: { valid: true, found: false, reason: 'CNPJ não encontrado na Receita' } });
+        res
+          .status(200)
+          .json({ data: { valid: true, found: false, reason: 'CNPJ não encontrado na Receita' } });
         return;
       }
       if (!resp.ok) {
-        res.status(200).json({ data: { valid: true, found: null, reason: 'Não foi possível consultar a Receita agora' } });
+        res.status(200).json({
+          data: {
+            valid: true,
+            found: null,
+            reason: 'Não foi possível consultar a Receita agora',
+          },
+        });
         return;
       }
 

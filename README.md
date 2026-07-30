@@ -113,8 +113,9 @@ setup do banco em [docs/database/DATABASE_SETUP.md](docs/database/DATABASE_SETUP
 | `npm run dev` | API em modo watch (nodemon + ts-node) |
 | `npm run build` | Compila TypeScript para `dist/` |
 | `npm start` | Roda o build de produção |
-| `npm run lint` | ESLint em `src/` |
-| `npm run format` | Prettier em `src/` |
+| `npm run check` | Formatação + lint + tipos, tudo de uma vez |
+| `npm run lint` | ESLint em `src/` e `prisma/` |
+| `npm run format` | Prettier em `src/` e `prisma/` |
 | `npm run db:push` | Aplica o schema no banco |
 | `npm run db:migrate:dev` | Cria e aplica migration em dev |
 | `npm run db:seed` | Popula dados de teste |

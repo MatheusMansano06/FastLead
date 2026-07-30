@@ -19,10 +19,7 @@ router.get(
       ? req.params.campaignId[0]
       : req.params.campaignId;
 
-    const campaign = await CampaignService.getCampaignById(
-      campaignId,
-      req.user!.companyId!
-    );
+    const campaign = await CampaignService.getCampaignById(campaignId, req.user!.companyId!);
 
     res.status(200).json({
       message: 'Campaign details retrieved',
@@ -45,10 +42,7 @@ router.get(
       ? req.params.campaignId[0]
       : req.params.campaignId;
 
-    const imageUrl = await CampaignService.getCampaignImage(
-      campaignId,
-      req.user!.companyId!
-    );
+    const imageUrl = await CampaignService.getCampaignImage(campaignId, req.user!.companyId!);
 
     // Redirect to image URL
     res.redirect(imageUrl);
@@ -69,10 +63,7 @@ router.get(
       ? req.params.campaignId[0]
       : req.params.campaignId;
 
-    const qrUrl = await CampaignService.getCampaignQRCode(
-      campaignId,
-      req.user!.companyId!
-    );
+    const qrUrl = await CampaignService.getCampaignQRCode(campaignId, req.user!.companyId!);
 
     res.status(200).json({
       message: 'QR code retrieved',
@@ -95,10 +86,7 @@ router.delete(
       ? req.params.campaignId[0]
       : req.params.campaignId;
 
-    const result = await CampaignService.deleteCampaign(
-      campaignId,
-      req.user!.companyId!
-    );
+    const result = await CampaignService.deleteCampaign(campaignId, req.user!.companyId!);
 
     res.status(200).json({
       message: 'Campaign deleted successfully',

@@ -48,3 +48,27 @@ export class ConflictError extends AppError {
     Object.setPrototypeOf(this, ConflictError.prototype);
   }
 }
+
+/**
+ * Erro conhecido do Prisma (violação de unique, FK ausente etc.).
+ * Só os campos que consultamos — o objeto real traz mais.
+ */
+export interface PrismaKnownError {
+  code: string;
+  meta?: { target?: string[] | string };
+}
+
+/**
+ * Estreita um `unknown` de catch para um erro do Prisma.
+ *
+ * Existe para os catches pararem de usar `any`: com `any`, um engano de nome
+ * como `error.metaa?.target` compila em silêncio e vira undefined em produção.
+ */
+export function isPrismaKnownError(error: unknown): error is PrismaKnownError {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    typeof (error as { code: unknown }).code === 'string'
+  );
+}

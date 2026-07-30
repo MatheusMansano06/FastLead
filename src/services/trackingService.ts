@@ -110,7 +110,9 @@ export class TrackingService {
     }
     await prisma.campaignMotorista
       .update({
-        where: { campaign_id_motorista_id: { campaign_id: campaign.id, motorista_id: motoristaId } },
+        where: {
+          campaign_id_motorista_id: { campaign_id: campaign.id, motorista_id: motoristaId },
+        },
         data: { scans_count: { increment: 1 } },
       })
       .catch(() => {

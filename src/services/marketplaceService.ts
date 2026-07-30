@@ -1,6 +1,6 @@
 import prisma from '../lib/prisma';
 import { RideApp, RideCategory } from '@prisma/client';
-import { NotFoundError, ConflictError, ValidationError } from '../utils/errors';
+import { NotFoundError, ConflictError, ValidationError, isPrismaKnownError } from '../utils/errors';
 import logger from '../config/logger';
 
 // Marketplace = matching CROSS-TENANT entre anunciantes e motoristas.
@@ -79,7 +79,7 @@ export class MarketplaceService {
 
     const elegiveis = campaigns.filter((c) => this.matchesTargeting(c, profile));
 
-    return elegiveis.map((c: any) => ({
+    return elegiveis.map((c) => ({
       id: c.id,
       title: c.title,
       description: c.description,
@@ -139,8 +139,9 @@ export class MarketplaceService {
       });
       logger.info(`Motorista ${profile.id} aceitou campanha ${campaignId}`);
       return { id: link.id, campaignId, acceptedAt: link.acceptance_date };
-    } catch (e: any) {
-      if (e.code === 'P2002') throw new ConflictError('Você já aceitou esta campanha');
+    } catch (e: unknown) {
+      if (isPrismaKnownError(e) && e.code === 'P2002')
+        throw new ConflictError('Você já aceitou esta campanha');
       throw e;
     }
   }
@@ -189,7 +190,7 @@ export class MarketplaceService {
       take: Math.min(opts.limit ?? 50, 100),
     });
 
-    return motoristas.map((m: any) => ({
+    return motoristas.map((m) => ({
       id: m.id,
       name: m.user?.name,
       city: m.city,

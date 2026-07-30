@@ -30,10 +30,7 @@ const prismaClientSingleton = () => {
   const url = databaseUrlWithPoolLimit();
   return new PrismaClient({
     ...(url ? { datasources: { db: { url } } } : {}),
-    log:
-      process.env.NODE_ENV === 'development'
-        ? ['query', 'error', 'warn']
-        : ['error'],
+    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
   });
 };
 
@@ -43,8 +40,7 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClientSingleton | undefined;
 };
 
-export const prisma =
-  globalForPrisma.prisma ?? prismaClientSingleton();
+export const prisma = globalForPrisma.prisma ?? prismaClientSingleton();
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;

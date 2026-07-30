@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Uma execução por branch: um push novo cancela a anterior, que já não interessa.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (formatação, lint, tipos, build)
+    runs-on: ubuntu-latest
+    env:
+      # O Prisma exige a variável para resolver o datasource ao gerar o client e
+      # validar o schema. Nada aqui conecta em banco — é só um valor bem-formado.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # `npm ci` exige o package-lock.json versionado — por isso ele saiu do .gitignore.
+      - run: npm ci
+
+      - name: Validar schema do Prisma
+        run: npx prisma validate
+
+      - name: Formatação, lint e tipos
+        run: npm run check
+
+      - name: Build
+        run: npm run build
+
+  frontend:
+    name: Frontend (lint, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm run build
