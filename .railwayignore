@@ -1,0 +1,9 @@
+# Backend service deploy — exclude the frontend app and heavy dirs.
+# NOTE: avoid unanchored globs like *.html/*.md — `railway up` merges this file
+# into the frontend deploy (run from frontend/) and such globs would wrongly
+# drop frontend/index.html. Exclude by directory / specific filename instead.
+frontend/
+skills/
+POSTMAN_COLLECTION.json
+docker-compose.yml
+FASTLEAD_PLANO_NEGOCIO.html

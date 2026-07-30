@@ -1,0 +1,505 @@
+{
+  "info": {
+    "name": "FastLead Backend API",
+    "description": "Complete API testing collection for FastLead backend",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/health",
+              "host": ["{{BASE_URL}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register Driver",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"newdriver@fastlead.com\",\n  \"password\": \"SecurePass123!\",\n  \"type\": \"driver\",\n  \"fullName\": \"João Silva\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/auth/register",
+              "host": ["{{BASE_URL}}"],
+              "path": ["auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Register Advertiser",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"newadvertiser@fastlead.com\",\n  \"password\": \"SecurePass123!\",\n  \"type\": \"advertiser\",\n  \"fullName\": \"Empresa XYZ\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/auth/register",
+              "host": ["{{BASE_URL}}"],
+              "path": ["auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.environment.set('ACCESS_TOKEN', jsonData.data.token);",
+                  "pm.environment.set('REFRESH_TOKEN', jsonData.data.refreshToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"joao.silva@motorista.com\",\n  \"password\": \"motorista123\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/auth/login",
+              "host": ["{{BASE_URL}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/auth/me",
+              "host": ["{{BASE_URL}}"],
+              "path": ["auth", "me"]
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{REFRESH_TOKEN}}\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/auth/refresh",
+              "host": ["{{BASE_URL}}"],
+              "path": ["auth", "refresh"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Driver Endpoints",
+      "item": [
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/driver/me",
+              "host": ["{{BASE_URL}}"],
+              "path": ["driver", "me"]
+            }
+          }
+        },
+        {
+          "name": "Get Earnings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/driver/earnings",
+              "host": ["{{BASE_URL}}"],
+              "path": ["driver", "earnings"]
+            }
+          }
+        },
+        {
+          "name": "Get Active Campaigns",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/driver/campaigns",
+              "host": ["{{BASE_URL}}"],
+              "path": ["driver", "campaigns"]
+            }
+          }
+        },
+        {
+          "name": "Get Payment History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/driver/payments?limit=10&offset=0",
+              "host": ["{{BASE_URL}}"],
+              "path": ["driver", "payments"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+55 11 99999-9999\",\n  \"vehicleInfo\": \"Toyota Prius 2023\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/driver/profile",
+              "host": ["{{BASE_URL}}"],
+              "path": ["driver", "profile"]
+            }
+          }
+        },
+        {
+          "name": "Update Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ATIVO\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/driver/status",
+              "host": ["{{BASE_URL}}"],
+              "path": ["driver", "status"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Advertiser Endpoints",
+      "item": [
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/advertiser/me",
+              "host": ["{{BASE_URL}}"],
+              "path": ["advertiser", "me"]
+            }
+          }
+        },
+        {
+          "name": "Get Campaigns",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/advertiser/campaigns",
+              "host": ["{{BASE_URL}}"],
+              "path": ["advertiser", "campaigns"]
+            }
+          }
+        },
+        {
+          "name": "Create Campaign",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Nova Campanha\",\n  \"description\": \"Descrição da campanha\",\n  \"numVehicles\": 5,\n  \"durationDays\": 30,\n  \"pricePerLead\": 25.00\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/advertiser/campaigns",
+              "host": ["{{BASE_URL}}"],
+              "path": ["advertiser", "campaigns"]
+            }
+          }
+        },
+        {
+          "name": "Get Campaign Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/advertiser/campaigns/CAMPAIGN_ID",
+              "host": ["{{BASE_URL}}"],
+              "path": ["advertiser", "campaigns", "CAMPAIGN_ID"]
+            }
+          }
+        },
+        {
+          "name": "Update Campaign",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Campanha Atualizada\",\n  \"status\": \"ACTIVE\",\n  \"pricePerLead\": 30.00\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/advertiser/campaigns/CAMPAIGN_ID",
+              "host": ["{{BASE_URL}}"],
+              "path": ["advertiser", "campaigns", "CAMPAIGN_ID"]
+            }
+          }
+        },
+        {
+          "name": "Get Campaign Leads",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/advertiser/campaigns/CAMPAIGN_ID/leads?limit=20&offset=0",
+              "host": ["{{BASE_URL}}"],
+              "path": ["advertiser", "campaigns", "CAMPAIGN_ID", "leads"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Campaigns Endpoints",
+      "item": [
+        {
+          "name": "Get Campaign Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/campaigns/CAMPAIGN_ID",
+              "host": ["{{BASE_URL}}"],
+              "path": ["campaigns", "CAMPAIGN_ID"]
+            }
+          }
+        },
+        {
+          "name": "Get Campaign QR Code",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/campaigns/CAMPAIGN_ID/qr",
+              "host": ["{{BASE_URL}}"],
+              "path": ["campaigns", "CAMPAIGN_ID", "qr"]
+            }
+          }
+        },
+        {
+          "name": "Delete Campaign",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/campaigns/CAMPAIGN_ID",
+              "host": ["{{BASE_URL}}"],
+              "path": ["campaigns", "CAMPAIGN_ID"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payments Endpoints",
+      "item": [
+        {
+          "name": "Get Motorista Earnings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ACCESS_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/payments/motorista/MOTORISTA_ID/earnings",
+              "host": ["{{BASE_URL}}"],
+              "path": ["payments", "motorista", "MOTORISTA_ID", "earnings"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "BASE_URL",
+      "value": "http://localhost:3000",
+      "type": "default"
+    },
+    {
+      "key": "ACCESS_TOKEN",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "REFRESH_TOKEN",
+      "value": "",
+      "type": "default"
+    }
+  ]
+}

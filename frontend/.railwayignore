@@ -1,0 +1,6 @@
+node_modules
+dist
+dist-ssr
+.railway
+*.log
+.DS_Store

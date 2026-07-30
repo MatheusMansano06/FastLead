@@ -1,0 +1,20 @@
+{
+  "name": "FastLead Tablet",
+  "short_name": "FastLead",
+  "description": "Tela de anúncios FastLead para o tablet do motorista",
+  "start_url": "/tablet",
+  "scope": "/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0B1D3A",
+  "theme_color": "#0B1D3A",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

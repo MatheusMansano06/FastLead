@@ -1,0 +1,302 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║         FastLead Multi-Tenant Database Schema Diagram (v1.0)                   ║
+║                                                                                ║
+║                  Complete Entity-Relationship Diagram                          ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+════════════════════════════════════════════════════════════════════════════════════
+
+                            ╔═══════════════════╗
+                            ║    COMPANY        ║  ← Tenant Container
+                            ║                   ║    Isolates all data
+                            ║ id (PK)           ║    by company_id
+                            ║ name              ║
+                            ║ email (UNIQUE)    ║
+                            ║ status            ║
+                            ║ created_at        ║
+                            ║ deleted_at (soft) ║
+                            ╚════┬══════════════╝
+                                 │
+                  ┌──────────────┼──────────────┐
+                  │              │              │
+                  ▼              ▼              ▼
+        ╔════════════════╗ ╔════════════╗ ╔═══════════════╗
+        ║     USER       ║ │ CAMPAIGN   │ │  AUDIT_LOG    │
+        ║                ║ │            │ │               │
+        ║ id (PK)        ║ │ id (PK)    │ │ id (PK)       │
+        ║ company_id (FK)║ │ company_id │ │ company_id    │
+        ║ email          ║ │ anunciante │ │ user_id (FK)  │
+        ║ name           ║ │ created_by │ │ action        │
+        ║ type (ENUM)    ║ │ title      │ │ resource_type │
+        ║   - MOTORISTA  ║ │ qr_code    │ │ old_values    │
+        ║   - ANUNCIANTE ║ │ image_url  │ │ new_values    │
+        ║   - ADMIN      ║ │ status     │ │ created_at    │
+        ║ password_hash  ║ │ start_date │ │               │
+        ║ is_active      ║ │ end_date   │ │  [Compliance] │
+        ║ is_verified    ║ │ price_per  │ │               │
+        ║ created_at     ║ │ total_leads│ │               │
+        ║ deleted_at     ║ │ conversions│ │               │
+        ╚════┬────┬──────╝ ╚════┬───────╝ ╚═══════════════╝
+             │    │             │
+        ┌────┘    └─────┐   ┌───┴─────────┐
+        │                │   │             │
+        ▼                ▼   ▼             ▼
+  ╔═════════════╗  ╔═══════════════════╗ ╔═════════════════╗
+  │ MOTORISTA_  │  │CAMPAIGN_          │ │    LEAD         │
+  │ PROFILE     │  │MOTORISTA          │ │                 │
+  │             │  │  (N:N Junction)   │ │ id (PK)         │
+  │ id (PK)     │  │                   │ │ campaign_id (FK)│
+  │ user_id (FK)│  │ id (PK)           │ │ motorista_id(FK)│
+  │ company_id  │  │ campaign_id (FK)  │ │ user_id (FK)    │
+  │ vehicle_    │  │ motorista_id (FK) │ │ qr_scan_time    │
+  │  info       │  │ status            │ │ status (ENUM)   │
+  │ license_    │  │ acceptance_date   │ │   - PENDING     │
+  │  plate      │  │ scans_count       │ │   - CONVERTED   │
+  │ phone       │  │ leads_generated   │ │   - INVALID     │
+  │ total_      │  │ created_at        │ │ converted_at    │
+  │  earnings   │  │                   │ │ conversion_value│
+  │ status      │  │ [Tracking Link]   │ │ user_device     │
+  │   - ATIVO   │  │                   │ │ ip_address      │
+  │   - INATIVO │  ╚═══════════════════╝ │ latitude/lon    │
+  │   - SUSPENSO│                        │ created_at      │
+  │ last_online │                        │ deleted_at      │
+  │ bank_       │                        │                 │
+  │  account    │                        │ [QR Tracking]   │
+  │ created_at  │                        ╚═════════════════╝
+  │ deleted_at  │
+  ╚─────┬───────╝
+        │
+        ▼
+   ╔════════════════╗
+   │  PAYMENT       │
+   │                │
+   │ id (PK)        │
+   │ motorista_id   │
+   │   (FK)         │
+   │ campaign_id    │
+   │   (FK, NULL)   │
+   │ amount         │
+   │ payment_type   │
+   │ status         │
+   │ period_start   │
+   │ period_end     │
+   │ leads_count    │
+   │ paid_at        │
+   │ created_at     │
+   │                │
+   │ [Earnings]     │
+   ╚════════════════╝
+
+
+  ╔══════════════════╗
+  │ANUNCIANTE_       │
+  │PROFILE           │
+  │                  │
+  │ id (PK)          │
+  │ user_id (FK)     │
+  │ company_id       │
+  │ company_name     │
+  │ document_number  │
+  │ industry         │
+  │ total_budget     │
+  │ total_spent      │
+  │ contact_person   │
+  │ created_at       │
+  │ deleted_at       │
+  │                  │
+  │ [Advertiser]     │
+  ╚══════════════════╝
+
+════════════════════════════════════════════════════════════════════════════════════
+
+RELATIONSHIP SUMMARY
+════════════════════════════════════════════════════════════════════════════════════
+
+Company (1:N) User
+  └─→ Users can be motorista, anunciante, or admin
+  └─→ (company_id, email) is unique key
+
+User (1:1) MotoristProfile [if type = MOTORISTA]
+  └─→ Driver data, vehicle info, earnings tracking
+
+User (1:1) AnuncianteProfile [if type = ANUNCIANTE]
+  └─→ Advertiser data, company info, budget tracking
+
+Campaign (N:N) MotoristProfile [via CampaignMotorista]
+  └─→ Campaigns are shown on multiple vehicles
+  └─→ Tracks acceptance status and scan counts
+
+Campaign (1:N) Lead
+  └─→ Each QR scan creates a lead record
+  └─→ Tracks conversion and ROI
+
+MotoristProfile (1:N) Lead
+  └─→ Which driver displayed the ad
+
+Lead (1:N) Payment
+  └─→ Payment per lead (or fixed)
+  └─→ Tracks motorista earnings
+
+Company (1:N) AuditLog
+  └─→ Complete audit trail
+  └─→ Before/after values logged
+
+════════════════════════════════════════════════════════════════════════════════════
+
+MULTI-TENANT ISOLATION
+════════════════════════════════════════════════════════════════════════════════════
+
+Every table includes company_id:
+
+  ✓ Company[id]
+  ├─ User[company_id]
+  ├─ MotoristProfile[company_id]
+  ├─ AnuncianteProfile[company_id]
+  ├─ Campaign[company_id]
+  ├─ CampaignMotorista[company_id]
+  ├─ Lead[company_id]
+  ├─ Payment[company_id]
+  └─ AuditLog[company_id]
+
+Unique Constraints:
+  • Company.email - GLOBAL (only once)
+  • User(company_id, email) - PER COMPANY
+  • Campaign(company_id, qr_code_data) - PER COMPANY
+  • MotoristProfile(company_id, user_id) - PER COMPANY
+
+Query Rule:
+  ✓ ALWAYS filter WHERE company_id = ?
+
+════════════════════════════════════════════════════════════════════════════════════
+
+ENUMS & STATUS FIELDS
+════════════════════════════════════════════════════════════════════════════════════
+
+UserType:
+  • MOTORISTA - Driver (displays ads, earns money)
+  • ANUNCIANTE - Advertiser (creates campaigns, tracks ROI)
+  • ADMIN - Administrator (manages company)
+
+CampaignStatus:
+  • DRAFT - Being created
+  • ACTIVE - Currently running
+  • PAUSED - Temporarily paused
+  • COMPLETED - Campaign period ended
+  • CANCELLED - Explicitly cancelled
+
+MotoristStatus:
+  • ATIVO - Online, can display ads
+  • INATIVO - Offline
+  • SUSPENSO - Account suspended
+
+LeadStatus:
+  • PENDING - QR scanned, waiting for conversion
+  • CONVERTED - Customer took action
+  • INVALID - Bot/duplicate scan
+
+PaymentStatus:
+  • PENDING - Awaiting payment
+  • PROCESSING - Being processed
+  • COMPLETED - Successfully paid
+  • FAILED - Payment failed
+  • REFUNDED - Refunded to motorista
+
+PaymentType:
+  • FIXED - Fixed salary
+  • PER_LEAD - Payment per QR scan
+  • HYBRID - Base + bonus per lead
+
+AuditAction:
+  • CREATE - Record created
+  • UPDATE - Record updated
+  • DELETE - Record deleted
+  • VIEW - Record accessed
+  • LOGIN - User login
+  • LOGOUT - User logout
+  • PAYMENT - Payment processed
+
+════════════════════════════════════════════════════════════════════════════════════
+
+SOFT DELETE FIELDS
+════════════════════════════════════════════════════════════════════════════════════
+
+All core entities have deleted_at:
+
+  ✓ Company[deleted_at]
+  ✓ User[deleted_at]
+  ✓ MotoristProfile[deleted_at]
+  ✓ AnuncianteProfile[deleted_at]
+  ✓ Campaign[deleted_at]
+  ✓ Lead[deleted_at]
+
+  Note: Payment and AuditLog don't have deleted_at (immutable records)
+
+Query Pattern:
+  SELECT * FROM "Campaign" WHERE deleted_at IS NULL;
+
+Soft Delete Pattern:
+  UPDATE "Campaign" SET deleted_at = NOW() WHERE id = ?;
+
+════════════════════════════════════════════════════════════════════════════════════
+
+INDEXING STRATEGY
+════════════════════════════════════════════════════════════════════════════════════
+
+Foreign Key Indexes (Automatic):
+  • User.company_id
+  • MotoristProfile(company_id, user_id)
+  • Campaign(company_id, anunciante_id)
+  • Lead(campaign_id, motorista_id)
+
+Performance Indexes:
+  • Campaign(company_id, status, start_date, end_date)
+  • Lead(qr_scan_time, status, created_at)
+  • Payment(motorista_id, status, period_start)
+  • AuditLog(company_id, action, created_at)
+
+Expected Size at Scale (1M leads):
+  • Lead index: ~2MB
+  • Campaign index: ~50KB
+  • Payment index: ~500KB
+  • Audit index: ~5MB
+
+════════════════════════════════════════════════════════════════════════════════════
+
+COMMON QUERY PATTERNS
+════════════════════════════════════════════════════════════════════════════════════
+
+Motorista Dashboard:
+  SELECT m.*, COUNT(DISTINCT l.id) as monthly_scans
+  FROM MotoristProfile m
+  LEFT JOIN Lead l ON m.id = l.motorista_id
+    AND YEAR(l.qr_scan_time) = YEAR(NOW())
+    AND MONTH(l.qr_scan_time) = MONTH(NOW())
+  WHERE m.company_id = ? AND m.user_id = ?
+  GROUP BY m.id;
+
+Campaign ROI:
+  SELECT c.*,
+    COUNT(l.id) as total_scans,
+    COUNT(CASE WHEN l.status = 'CONVERTED' THEN 1 END) as conversions,
+    SUM(CASE WHEN l.status = 'CONVERTED' THEN l.conversion_value ELSE 0 END) as revenue,
+    (revenue / c.total_investment) as roi_multiple
+  FROM Campaign c
+  LEFT JOIN Lead l ON c.id = l.campaign_id
+  WHERE c.company_id = ? AND c.id = ?
+  GROUP BY c.id;
+
+Active Motoristas:
+  SELECT * FROM MotoristProfile
+  WHERE company_id = ? AND status = 'ATIVO'
+  ORDER BY total_earnings DESC;
+
+Audit Trail:
+  SELECT * FROM AuditLog
+  WHERE company_id = ?
+    AND resource_type = 'Campaign'
+    AND resource_id = ?
+  ORDER BY created_at DESC;
+
+════════════════════════════════════════════════════════════════════════════════════
+
+END OF SCHEMA DIAGRAM

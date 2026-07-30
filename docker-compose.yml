@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: fastlead_postgres
+    environment:
+      POSTGRES_USER: fastlead_user
+      POSTGRES_PASSWORD: fastlead_password_dev
+      POSTGRES_DB: fastlead_db
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fastlead_user -d fastlead_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fastlead_network
+
+  # pgadmin for database management (optional)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: fastlead_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@fastlead.com.br
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - fastlead_network
+
+volumes:
+  postgres_data:
+
+networks:
+  fastlead_network:
+    driver: bridge
