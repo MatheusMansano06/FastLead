@@ -1,42 +1,51 @@
-import { useRef, useLayoutEffect } from 'react';
-import { useMotionValueEvent } from 'framer-motion';
+import { useEffect, useRef, useState } from 'react';
 
-// Linear piecewise interpolation.
-const interp = (p, inp, out) => {
-  const n = inp.length;
-  if (p <= inp[0]) return out[0];
-  if (p >= inp[n - 1]) return out[n - 1];
-  for (let i = 0; i < n - 1; i++) {
-    if (p <= inp[i + 1]) {
-      const t = (p - inp[i]) / (inp[i + 1] - inp[i]);
-      return out[i] + t * (out[i + 1] - out[i]);
-    }
-  }
-  return out[n - 1];
-};
-
-// Scroll-driven opacity/translate applied straight to the DOM node via a motion
-// subscription. This sidesteps Framer's WAAPI acceleration, which mis-handles
-// monotonic (1→0) opacity fades by ignoring the input breakpoints.
-export default function Reveal({ progress, o, oOut, y, yOut, className = '', children }) {
+/**
+ * Reveal de entrada — fade + 8px de deslocamento, uma vez só.
+ *
+ * O teto de 8px é deliberado. Os três concorrentes analisados (AquiAds,
+ * JCDecaux, Eletromidia) usam de 0 a 4px de deslocamento e nenhum usa parallax,
+ * scrub ou WebGL. Movimento grande é o que fazia a landing anterior parecer
+ * demo de portfólio em vez de fornecedor de mídia. Se for mexer neste número,
+ * mexa para baixo.
+ */
+export default function Reveal({ children, delay = 0, className = '' }) {
   const ref = useRef(null);
+  const [visivel, setVisivel] = useState(false);
 
-  const apply = (p) => {
+  useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    el.style.opacity = interp(p, o, oOut);
-    if (y) el.style.transform = `translateY(${interp(p, y, yOut)}px)`;
-  };
 
-  useLayoutEffect(() => {
-    apply(progress.get());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Quem pediu menos movimento no sistema não recebe nem os 8px.
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setVisivel(true);
+      return;
+    }
+
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisivel(true);
+          obs.disconnect();
+        }
+      },
+      { rootMargin: '0px 0px -8% 0px', threshold: 0.05 },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
   }, []);
 
-  useMotionValueEvent(progress, 'change', apply);
-
   return (
-    <div ref={ref} className={className}>
+    <div
+      ref={ref}
+      className={className}
+      style={{
+        opacity: visivel ? 1 : 0,
+        transform: visivel ? 'none' : 'translateY(8px)',
+        transition: `opacity 520ms cubic-bezier(0.16,1,0.3,1) ${delay}ms, transform 520ms cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
+      }}
+    >
       {children}
     </div>
   );

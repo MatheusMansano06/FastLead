@@ -74,10 +74,13 @@ function RideBar() {
   );
 }
 
-function BrandChip({ brand }) {
+function BrandChip({ brand, pontoCor }) {
   return (
     <span className="absolute left-3 top-3 z-20 flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-bold text-ink shadow-sm backdrop-blur">
-      <span className="h-2 w-2 rounded-full bg-brand" />
+      <span
+        className={`h-2 w-2 rounded-full ${pontoCor ? '' : 'bg-brand'}`}
+        style={pontoCor ? { backgroundColor: pontoCor } : undefined}
+      />
       {brand}
     </span>
   );
@@ -98,8 +101,62 @@ export default function AdTablet({
   headline = 'Sua próxima\nexperiência',
   tone = 'brand',
   className = '',
+  // Paleta livre (array de cores) para peças de exemplo que não usam a paleta
+  // FastLead. Quando ausente, cai no `tone` de sempre.
+  cores = null,
+  pontoCor = null,
+  cta = 'Enviar pro e-mail →',
+  qrTexto = 'Escaneie e fale\ndireto com a marca',
+  /**
+   * Peça real do anunciante. Quando presente, a arte ocupa a tela inteira e
+   * substitui gradiente, chip de marca e textos — a peça já traz logotipo e
+   * copy próprios, e repetir isso por cima suja o mockup. Sobram apenas os
+   * elementos que são DA PLATAFORMA, não do anunciante: o selo "AD", a barra
+   * de corrida e, no formato vídeo, o botão de play.
+   */
+  imagem = null,
+  imagemAlt = '',
 }) {
   const gradient = TONES[tone] ?? TONES.brand;
+  const classeFundo = cores ? '' : `bg-gradient-to-br ${gradient}`;
+  const estiloFundo = cores
+    ? { backgroundImage: `linear-gradient(135deg, ${cores.join(', ')})` }
+    : undefined;
+
+  // Peça real: a arte manda na tela toda, inclusive no formato interativo —
+  // o QR já vem embutido na própria peça do anunciante.
+  //
+  // Sem RideBar aqui de propósito: a barra de corrida é cromo do tablet e, na
+  // vitrine de formatos, comer 15% da altura só para repetir "EM CORRIDA" três
+  // vezes tira área da única coisa que o anunciante veio ver — a peça dele.
+  if (imagem) {
+    return (
+      <div className={`relative ${className}`}>
+        <div className="rounded-[1.5rem] bg-gradient-to-b from-[#16161e] to-[#050507] p-2 shadow-[0_40px_110px_-30px_rgba(11,29,58,0.55)] ring-1 ring-black/10">
+          <div className="relative aspect-[16/10] w-full overflow-hidden rounded-[1.05rem] bg-ink">
+            <img
+              src={imagem}
+              alt={imagemAlt || `Peça de ${brand} exibida no tablet`}
+              loading="lazy"
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+
+            {variant === 'video' && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg backdrop-blur">
+                  <svg viewBox="0 0 24 24" className="ml-0.5 h-5 w-5 text-ink" fill="currentColor">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                </span>
+              </div>
+            )}
+
+            <AdBadge />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`relative ${className}`}>
@@ -121,15 +178,13 @@ export default function AdTablet({
                       )),
                     )}
                   </div>
-                  <p className="text-center text-[8px] font-semibold leading-tight text-ink/60">
-                    Escaneie e fale
-                    <br />
-                    direto com a marca
+                  <p className="whitespace-pre-line text-center text-[8px] font-semibold leading-tight text-ink/60">
+                    {qrTexto}
                   </p>
                 </div>
                 {/* Ad half */}
-                <div className={`relative flex-1 bg-gradient-to-br ${gradient}`}>
-                  <BrandChip brand={brand} />
+                <div className={`relative flex-1 ${classeFundo}`} style={estiloFundo}>
+                  <BrandChip brand={brand} pontoCor={pontoCor} />
                   <div className="absolute inset-x-3 bottom-3">
                     <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/70">
                       {eyebrow}
@@ -142,8 +197,8 @@ export default function AdTablet({
                 </div>
               </div>
             ) : (
-              <div className={`relative h-full bg-gradient-to-br ${gradient}`}>
-                <BrandChip brand={brand} />
+              <div className={`relative h-full ${classeFundo}`} style={estiloFundo}>
+                <BrandChip brand={brand} pontoCor={pontoCor} />
 
                 {variant === 'video' && (
                   <div className="absolute inset-0 flex items-center justify-center">
@@ -162,9 +217,9 @@ export default function AdTablet({
                   <p className="whitespace-pre-line font-grotesk text-2xl font-bold leading-[1.02] text-white md:text-[26px]">
                     {headline}
                   </p>
-                  {variant === 'display' && (
+                  {variant === 'display' && cta && (
                     <span className="mt-2 inline-flex items-center gap-1 rounded-md bg-white/95 px-2.5 py-1 text-[10px] font-semibold text-ink shadow-sm">
-                      Enviar pro e-mail →
+                      {cta}
                     </span>
                   )}
                 </div>

@@ -96,6 +96,68 @@ select:disabled {
   }
 }
 
+/* ===== Landing: slider do simulador de mídia =====
+   A trilha e os degraus são desenhados por divs no componente; o input fica
+   transparente por cima só para capturar o arraste e o teclado. Aqui estilizamos
+   apenas o thumb, que não é acessível por div. */
+.fl-range::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 22px;
+  width: 22px;
+  border-radius: 9999px;
+  background: var(--fl-cor, #2563ff);
+  border: 4px solid #fff;
+  box-shadow: 0 2px 8px rgb(11 29 58 / 0.28);
+  cursor: grab;
+  transition: transform 120ms ease;
+}
+
+.fl-range::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  transform: scale(1.12);
+}
+
+.fl-range::-moz-range-thumb {
+  height: 22px;
+  width: 22px;
+  border-radius: 9999px;
+  background: var(--fl-cor, #2563ff);
+  border: 4px solid #fff;
+  box-shadow: 0 2px 8px rgb(11 29 58 / 0.28);
+  cursor: grab;
+}
+
+.fl-range:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--fl-cor, #2563ff);
+  outline-offset: 3px;
+}
+
+.fl-range:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--fl-cor, #2563ff);
+  outline-offset: 3px;
+}
+
+/* ===== Landing: marquee de praças ===== */
+@keyframes fl-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.fl-marquee-track {
+  animation: fl-marquee 42s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fl-marquee-track {
+    animation: none;
+  }
+}
+
 /* ===== Utility Classes ===== */
 .truncate-lines-2 {
   display: -webkit-box;

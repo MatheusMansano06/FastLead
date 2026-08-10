@@ -38,3 +38,6 @@ coverage/
 tmp/
 temp/
 .worktrees/
+
+# Worktrees criados pelo Claude Code — checkouts inteiros, centenas de MB
+.claude/worktrees/

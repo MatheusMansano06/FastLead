@@ -5,9 +5,9 @@ import { useAuthStore, homePathFor } from './stores/authStore';
 /**
  * Tudo entra por lazy import de propósito.
  *
- * A landing carrega three.js + React Three Fiber (~1MB). O tablet do carro e a
- * landing de captura do passageiro NUNCA usam isso — e são justamente as telas
- * que rodam em aparelho fraco e 4G ruim. Com o split cada rota baixa só o seu.
+ * O tablet do carro e a landing de captura do passageiro rodam em aparelho
+ * fraco e 4G ruim — com o split cada rota baixa só o seu chunk, sem arrastar o
+ * peso das telas de painel.
  */
 
 // Público
