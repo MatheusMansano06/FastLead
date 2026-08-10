@@ -159,8 +159,8 @@ export default function Landing() {
                 <img
                   src="/passageiro-tablet.webp"
                   alt="Passageira no banco de trás de um carro de aplicativo apontando a câmera do celular para o QR code exibido no tablet FastLead"
-                  width="1145"
-                  height="1374"
+                  width="1373"
+                  height="1146"
                   fetchPriority="high"
                   className="w-full rounded-2xl object-cover shadow-[0_30px_70px_-40px_rgba(11,29,58,0.45)]"
                 />
