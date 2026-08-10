@@ -64,6 +64,20 @@ enum AuditAction {
   PAYMENT
 }
 
+enum CreditTransactionType {
+  DEPOSIT // Empresa adicionou crédito (recarregou cartão)
+  CAMPAIGN_DEBIT // Débito ao criar anúncio
+  LEAD_PAYOUT // Desconto do lead convertido (30% comissão motorista)
+  REFUND // Reembolso
+  ADJUSTMENT // Admin ajuste manual
+}
+
+enum BankAccountStatus {
+  PENDING_VERIFICATION // Dados fornecidos, aguarda validação
+  VERIFIED // Pronto para receber
+  BLOCKED // Admin bloqueou (fraude, etc)
+}
+
 /// Regiões do Brasil — usadas para segmentar campanhas
 enum Region {
   NORTE
@@ -120,8 +134,8 @@ enum DeviceStatus {
 /// Origem do vínculo campanha↔motorista (marketplace ou curadoria MASTER)
 enum AssignmentSource {
   DRIVER_ACCEPTED // motorista aceitou no marketplace
-  MASTER_FORCED   // MASTER atribuiu por cima
-  MASTER_BLOCKED  // MASTER bloqueou essa campanha para esse motorista
+  MASTER_FORCED // MASTER atribuiu por cima
+  MASTER_BLOCKED // MASTER bloqueou essa campanha para esse motorista
   /// Motorista tirou o anúncio do tablet dele. É o carro e a tela dele —
   /// pode recusar até o que o MASTER empurrou. Guardamos em vez de apagar
   /// para a distribuição automática não devolver o anúncio no minuto seguinte.
@@ -148,35 +162,40 @@ enum QrPosition {
 
 /// Empresas/Tenants no sistema (FastLead + parceiras)
 model Company {
-  id                String   @id @default(cuid())
-  name              String   @db.VarChar(255)
-  email             String   @unique @db.VarChar(255)
-  phone             String?  @db.VarChar(20)
-  website           String?  @db.VarChar(500)
-  logo_url          String?  @db.VarChar(500)
-  document_number   String?  @unique @db.VarChar(20) // CNPJ
-  country           String   @default("BR") @db.VarChar(2)
-  timezone          String   @default("America/Sao_Paulo") @db.VarChar(50)
-  status            String   @default("active") @db.VarChar(50)
+  id              String  @id @default(cuid())
+  name            String  @db.VarChar(255)
+  email           String  @unique @db.VarChar(255)
+  phone           String? @db.VarChar(20)
+  website         String? @db.VarChar(500)
+  logo_url        String? @db.VarChar(500)
+  document_number String? @unique @db.VarChar(20) // CNPJ
+  country         String  @default("BR") @db.VarChar(2)
+  timezone        String  @default("America/Sao_Paulo") @db.VarChar(50)
+  status          String  @default("active") @db.VarChar(50)
 
   // Timestamps
-  created_at        DateTime @default(now()) @db.Timestamp()
-  updated_at        DateTime @updatedAt @db.Timestamp()
-  deleted_at        DateTime? @db.Timestamp() // Soft delete
+  created_at DateTime  @default(now()) @db.Timestamp()
+  updated_at DateTime  @updatedAt @db.Timestamp()
+  deleted_at DateTime? @db.Timestamp() // Soft delete
 
   // Relations
-  users             User[]
-  motorista_profiles MotoristProfile[]
+  users               User[]
+  motorista_profiles  MotoristProfile[]
   anunciante_profiles AnuncianteProfile[]
-  campaigns         Campaign[]
+  campaigns           Campaign[]
   campaign_motoristas CampaignMotorista[]
-  leads             Lead[]
-  payments          Payment[]
-  audit_logs        AuditLog[]
-  devices           TabletDevice[]
-  scan_events       ScanEvent[]
-  impression_events ImpressionEvent[]
-  sessions          TabletSession[]
+  leads               Lead[]
+  payments            Payment[]
+  audit_logs          AuditLog[]
+  devices             TabletDevice[]
+  scan_events         ScanEvent[]
+  impression_events   ImpressionEvent[]
+  sessions            TabletSession[]
+
+  // Crédito pré-pago da empresa para criar anúncios
+  credit_balance       Decimal             @default(0) @db.Decimal(12, 2)
+  credit_txs           CompanyCreditTx[]
+  driver_bank_accounts DriverBankAccount[]
 
   @@index([status])
   @@index([created_at])
@@ -184,32 +203,32 @@ model Company {
 
 /// Usuários do sistema (motoristas, anunciantes, admins)
 model User {
-  id                String   @id @default(cuid())
-  company_id        String
-  email             String   @db.VarChar(255)
-  password_hash     String   @db.VarChar(255)
-  name              String   @db.VarChar(255)
-  type              UserType
-  phone             String?  @db.VarChar(20)
+  id            String    @id @default(cuid())
+  company_id    String
+  email         String    @db.VarChar(255)
+  password_hash String    @db.VarChar(255)
+  name          String    @db.VarChar(255)
+  type          UserType
+  phone         String?   @db.VarChar(20)
   /// Text e não VarChar: a foto do perfil é guardada como data-URL
   /// redimensionada no cliente, que estoura 500 caracteres com folga.
-  avatar_url        String?  @db.Text
-  is_active         Boolean  @default(true)
-  is_verified       Boolean  @default(false)
-  last_login_at     DateTime? @db.Timestamp()
+  avatar_url    String?   @db.Text
+  is_active     Boolean   @default(true)
+  is_verified   Boolean   @default(false)
+  last_login_at DateTime? @db.Timestamp()
 
   // Timestamps
-  created_at        DateTime @default(now()) @db.Timestamp()
-  updated_at        DateTime @updatedAt @db.Timestamp()
-  deleted_at        DateTime? @db.Timestamp() // Soft delete
+  created_at DateTime  @default(now()) @db.Timestamp()
+  updated_at DateTime  @updatedAt @db.Timestamp()
+  deleted_at DateTime? @db.Timestamp() // Soft delete
 
   // Relations
-  company           Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  motorista_profile MotoristProfile?
+  company            Company            @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  motorista_profile  MotoristProfile?
   anunciante_profile AnuncianteProfile?
-  campaigns         Campaign[] @relation("CampaignCreator")
-  leads             Lead[]
-  audit_logs        AuditLog[]
+  campaigns          Campaign[]         @relation("CampaignCreator")
+  leads              Lead[]
+  audit_logs         AuditLog[]
 
   @@unique([company_id, email])
   @@index([company_id])
@@ -219,47 +238,47 @@ model User {
 
 /// Profile de motoristas
 model MotoristProfile {
-  id                String   @id @default(cuid())
-  company_id        String
-  user_id           String   @unique
-  vehicle_info      String?  @db.VarChar(500) // Marca, modelo, placa
-  license_plate     String?  @unique @db.VarChar(20)
-  phone             String?  @db.VarChar(20)
-  cpf               String?  @db.VarChar(14)  // CPF do motorista
-  bio               String?  @db.VarChar(500) // Texto curto do perfil
+  id            String  @id @default(cuid())
+  company_id    String
+  user_id       String  @unique
+  vehicle_info  String? @db.VarChar(500) // Marca, modelo, placa
+  license_plate String? @unique @db.VarChar(20)
+  phone         String? @db.VarChar(20)
+  cpf           String? @db.VarChar(14) // CPF do motorista
+  bio           String? @db.VarChar(500) // Texto curto do perfil
 
   // Segmentação geográfica
-  city              String?  @db.VarChar(120) // Cidade onde roda
-  state             String?  @db.VarChar(2)   // UF (SP, RJ, MG…)
-  region            Region?                   // Derivado da UF na escrita
+  city   String? @db.VarChar(120) // Cidade onde roda
+  state  String? @db.VarChar(2) // UF (SP, RJ, MG…)
+  region Region? // Derivado da UF na escrita
 
   // Segmentação por app / modalidade
-  ride_app          String?  @db.VarChar(50)  // LEGADO: texto livre, migrado para ride_apps
-  ride_apps         RideApp[]                 // Apps em que roda
-  ride_categories   RideCategory[]            // Modalidades que atende
+  ride_app        String?        @db.VarChar(50) // LEGADO: texto livre, migrado para ride_apps
+  ride_apps       RideApp[] // Apps em que roda
+  ride_categories RideCategory[] // Modalidades que atende
 
-  rating            Decimal  @default(5.0) @db.Decimal(3, 2) // Nota média (0–5)
-  ratings_count     Int      @default(0)
-  total_earnings    Decimal  @default(0) @db.Decimal(12, 2)
-  status            MotoristStatus @default(INATIVO)
-  last_online_at    DateTime? @db.Timestamp()
-  bank_account      String?  @db.VarChar(255) // CPF + Conta (encrypted em produção)
+  rating         Decimal        @default(5.0) @db.Decimal(3, 2) // Nota média (0–5)
+  ratings_count  Int            @default(0)
+  total_earnings Decimal        @default(0) @db.Decimal(12, 2)
+  status         MotoristStatus @default(INATIVO)
+  last_online_at DateTime?      @db.Timestamp()
 
   // Timestamps
-  created_at        DateTime @default(now()) @db.Timestamp()
-  updated_at        DateTime @updatedAt @db.Timestamp()
-  deleted_at        DateTime? @db.Timestamp()
+  created_at DateTime  @default(now()) @db.Timestamp()
+  updated_at DateTime  @updatedAt @db.Timestamp()
+  deleted_at DateTime? @db.Timestamp()
 
   // Relations
-  company           Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  user              User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  company           Company             @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  user              User                @relation(fields: [user_id], references: [id], onDelete: Cascade)
   campaigns         CampaignMotorista[]
   leads             Lead[]
-  payments          Payment[] @relation("PaymentMotorista")
+  payments          Payment[]           @relation("PaymentMotorista")
   devices           TabletDevice[]
   scan_events       ScanEvent[]
   impression_events ImpressionEvent[]
   sessions          TabletSession[]
+  bank_account      DriverBankAccount?
 
   @@unique([company_id, user_id])
   @@index([company_id])
@@ -271,28 +290,28 @@ model MotoristProfile {
 
 /// Profile de anunciantes
 model AnuncianteProfile {
-  id                String   @id @default(cuid())
-  company_id        String
-  user_id           String   @unique
-  company_name      String   @db.VarChar(255)
-  trade_name        String?  @db.VarChar(255) // Nome fantasia
-  document_number   String?  @db.VarChar(20)  // CNPJ
-  industry          String?  @db.VarChar(100)
-  website           String?  @db.VarChar(500)
-  role              String?  @db.VarChar(100) // Cargo do responsável
-  total_budget      Decimal  @default(0) @db.Decimal(12, 2)
-  total_spent       Decimal  @default(0) @db.Decimal(12, 2)
-  contact_person    String?  @db.VarChar(255) // Nome do responsável
+  id              String  @id @default(cuid())
+  company_id      String
+  user_id         String  @unique
+  company_name    String  @db.VarChar(255)
+  trade_name      String? @db.VarChar(255) // Nome fantasia
+  document_number String? @db.VarChar(20) // CNPJ
+  industry        String? @db.VarChar(100)
+  website         String? @db.VarChar(500)
+  role            String? @db.VarChar(100) // Cargo do responsável
+  total_budget    Decimal @default(0) @db.Decimal(12, 2)
+  total_spent     Decimal @default(0) @db.Decimal(12, 2)
+  contact_person  String? @db.VarChar(255) // Nome do responsável
 
   // Timestamps
-  created_at        DateTime @default(now()) @db.Timestamp()
-  updated_at        DateTime @updatedAt @db.Timestamp()
-  deleted_at        DateTime? @db.Timestamp()
+  created_at DateTime  @default(now()) @db.Timestamp()
+  updated_at DateTime  @updatedAt @db.Timestamp()
+  deleted_at DateTime? @db.Timestamp()
 
   // Relations
-  company           Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  user              User @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  campaigns         Campaign[]
+  company   Company    @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  campaigns Campaign[]
 
   @@unique([company_id, user_id])
   @@index([company_id])
@@ -304,69 +323,70 @@ model AnuncianteProfile {
 
 /// Campanhas de publicidade
 model Campaign {
-  id                String   @id @default(cuid())
-  company_id        String
-  anunciante_id     String
-  created_by_id     String
+  id            String @id @default(cuid())
+  company_id    String
+  anunciante_id String
+  created_by_id String
 
-  title             String   @db.VarChar(255)
-  description       String?  @db.Text
+  title       String  @db.VarChar(255)
+  description String? @db.Text
   /// Banner do anunciante. Text porque a arte sobe como data-URL do navegador,
   /// que estoura VarChar(500) com folga.
-  image_url         String?  @db.Text
+  image_url   String? @db.Text
 
   // ── Como o anúncio é montado na tela do tablet ──
   /// Se false, o banner ocupa a tela inteira sem QR (campanha só de marca).
-  show_qr           Boolean  @default(true)
+  show_qr           Boolean    @default(true)
   /// Canto do banner onde o QR é sobreposto — a empresa escolhe o espaço vazio da arte.
   qr_position       QrPosition @default(BOTTOM_RIGHT)
   /// Maioria dos banners já vem com texto embutido; nesse caso não repetimos.
-  show_text         Boolean  @default(true)
-  qr_code_data      String   @unique @db.VarChar(500) // Dado do QR (geralmente URL)
-  qr_code_image_url String?  @db.Text // Imagem do QR (data-URL base64 — pode ser grande)
+  show_text         Boolean    @default(true)
+  qr_code_data      String     @unique @db.VarChar(500) // Dado do QR (geralmente URL)
+  qr_code_image_url String?    @db.Text // Imagem do QR (data-URL base64 — pode ser grande)
 
   /// Para onde o passageiro é levado após escanear.
   /// Vazio = usa a landing de captura de lead da própria FastLead.
-  destination_url   String?  @db.VarChar(500)
+  destination_url String? @db.VarChar(500)
   /// Chamada exibida no tablet junto ao QR ("Aponte a câmera e ganhe 20% off")
-  cta_text          String?  @db.VarChar(160)
+  cta_text        String? @db.VarChar(160)
 
-  status            CampaignStatus @default(DRAFT)
-  start_date        DateTime @db.Date()
-  end_date          DateTime @db.Date()
+  status     CampaignStatus @default(DRAFT)
+  start_date DateTime       @db.Date()
+  end_date   DateTime       @db.Date()
 
-  target_vehicles   Int      @default(1) // Quantos motoristas a empresa quer
-  total_investment  Decimal  @default(0) @db.Decimal(12, 2)
-  price_per_lead    Decimal? @db.Decimal(12, 2)
-  daily_budget      Decimal? @db.Decimal(12, 2)
+  target_vehicles  Int      @default(1) // Quantos motoristas a empresa quer
+  total_investment Decimal  @default(0) @db.Decimal(12, 2)
+  price_per_lead   Decimal? @db.Decimal(12, 2)
+  daily_budget     Decimal? @db.Decimal(12, 2)
 
   // Segmentação — array vazio significa "sem restrição"
   target_regions    Region[]
-  target_states     String[]       // UFs
+  target_states     String[] // UFs
   target_cities     String[]
   target_ride_apps  RideApp[]
   target_categories RideCategory[]
 
   // Metrics (mantidas por trigger de aplicação; fonte da verdade são os eventos)
-  total_leads       Int      @default(0)
-  unique_scans      Int      @default(0)
-  total_impressions Int      @default(0)
-  conversions       Int      @default(0)
+  total_leads       Int @default(0)
+  unique_scans      Int @default(0)
+  total_impressions Int @default(0)
+  conversions       Int @default(0)
 
   // Timestamps
-  created_at        DateTime @default(now()) @db.Timestamp()
-  updated_at        DateTime @updatedAt @db.Timestamp()
-  deleted_at        DateTime? @db.Timestamp()
+  created_at DateTime  @default(now()) @db.Timestamp()
+  updated_at DateTime  @updatedAt @db.Timestamp()
+  deleted_at DateTime? @db.Timestamp()
 
   // Relations
-  company           Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  anunciante        AnuncianteProfile @relation(fields: [anunciante_id], references: [id], onDelete: Restrict)
-  created_by        User @relation("CampaignCreator", fields: [created_by_id], references: [id], onDelete: Restrict)
+  company           Company             @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  anunciante        AnuncianteProfile   @relation(fields: [anunciante_id], references: [id], onDelete: Restrict)
+  created_by        User                @relation("CampaignCreator", fields: [created_by_id], references: [id], onDelete: Restrict)
   motoristas        CampaignMotorista[]
   leads             Lead[]
   payments          Payment[]
   scan_events       ScanEvent[]
   impression_events ImpressionEvent[]
+  credit_txs        CompanyCreditTx[]
 
   @@unique([company_id, qr_code_data])
   @@index([company_id])
@@ -378,33 +398,33 @@ model Campaign {
 
 /// Relação N:N entre Campanhas e Motoristas
 model CampaignMotorista {
-  id                String   @id @default(cuid())
-  company_id        String
-  campaign_id       String
-  motorista_id      String
+  id           String @id @default(cuid())
+  company_id   String
+  campaign_id  String
+  motorista_id String
 
-  status            CampaignStatus @default(ACTIVE)
-  acceptance_date   DateTime? @db.Timestamp()
+  status          CampaignStatus @default(ACTIVE)
+  acceptance_date DateTime?      @db.Timestamp()
 
   // Curadoria híbrida: motorista aceita, MASTER pode forçar ou bloquear por cima
-  source            AssignmentSource @default(DRIVER_ACCEPTED)
-  assigned_by_id    String?  // User ADMIN que forçou/bloqueou
-  assigned_at       DateTime? @db.Timestamp()
-  priority          Int      @default(0) // Maior = aparece mais na rotação do tablet
+  source         AssignmentSource @default(DRIVER_ACCEPTED)
+  assigned_by_id String? // User ADMIN que forçou/bloqueou
+  assigned_at    DateTime?        @db.Timestamp()
+  priority       Int              @default(0) // Maior = aparece mais na rotação do tablet
 
   // Metrics
-  scans_count       Int      @default(0)
-  leads_generated   Int      @default(0)
-  impressions_count Int      @default(0)
+  scans_count       Int @default(0)
+  leads_generated   Int @default(0)
+  impressions_count Int @default(0)
 
   // Timestamps
-  created_at        DateTime @default(now()) @db.Timestamp()
-  updated_at        DateTime @updatedAt @db.Timestamp()
+  created_at DateTime @default(now()) @db.Timestamp()
+  updated_at DateTime @updatedAt @db.Timestamp()
 
   // Relations
-  company           Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  campaign          Campaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
-  motorista         MotoristProfile @relation(fields: [motorista_id], references: [id], onDelete: Cascade)
+  company   Company         @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  campaign  Campaign        @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+  motorista MotoristProfile @relation(fields: [motorista_id], references: [id], onDelete: Cascade)
 
   @@unique([campaign_id, motorista_id])
   @@index([company_id])
@@ -417,42 +437,48 @@ model CampaignMotorista {
 
 /// Leads gerados por QR scans
 model Lead {
-  id                String   @id @default(cuid())
-  company_id        String
-  campaign_id       String
-  motorista_id      String
-  user_id           String?  // NULL quando o lead vem de passageiro não cadastrado
-  scan_event_id     String?  @unique // Scan que originou este lead
+  id            String  @id @default(cuid())
+  company_id    String
+  campaign_id   String
+  motorista_id  String
+  user_id       String? // NULL quando o lead vem de passageiro não cadastrado
+  scan_event_id String? @unique // Scan que originou este lead
 
-  status            LeadStatus @default(PENDING)
-  qr_scan_time      DateTime @db.Timestamp()
+  status       LeadStatus @default(PENDING)
+  qr_scan_time DateTime   @db.Timestamp()
 
   // Contato deixado pelo passageiro (lead anônimo)
-  contact_name      String?  @db.VarChar(255)
-  contact_email     String?  @db.VarChar(255)
-  contact_phone     String?  @db.VarChar(20)
+  contact_name  String? @db.VarChar(255)
+  contact_email String? @db.VarChar(255)
+  contact_phone String? @db.VarChar(20)
 
   // Device & Location
-  user_device       String?  @db.VarChar(500) // User-Agent
-  ip_address        String?  @db.VarChar(50)
-  latitude          Float?
-  longitude         Float?
+  user_device String? @db.VarChar(500) // User-Agent
+  ip_address  String? @db.VarChar(50)
+  latitude    Float?
+  longitude   Float?
 
   // Conversion tracking
-  converted_at      DateTime? @db.Timestamp()
-  conversion_value  Decimal? @db.Decimal(12, 2)
+  converted_at     DateTime? @db.Timestamp()
+  conversion_value Decimal?  @db.Decimal(12, 2)
+
+  // Pagamento associado ao lead convertido
+  payment_id    String?
+  payout_status PaymentStatus @default(PENDING)
+  payout_at     DateTime?     @db.Timestamp()
 
   // Timestamps
-  created_at        DateTime @default(now()) @db.Timestamp()
-  updated_at        DateTime @updatedAt @db.Timestamp()
-  deleted_at        DateTime? @db.Timestamp()
+  created_at DateTime  @default(now()) @db.Timestamp()
+  updated_at DateTime  @updatedAt @db.Timestamp()
+  deleted_at DateTime? @db.Timestamp()
 
   // Relations
-  company           Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  campaign          Campaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
-  motorista         MotoristProfile @relation(fields: [motorista_id], references: [id], onDelete: Restrict)
-  user              User? @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  scan_event        ScanEvent? @relation(fields: [scan_event_id], references: [id], onDelete: SetNull)
+  company    Company           @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  campaign   Campaign          @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+  motorista  MotoristProfile   @relation(fields: [motorista_id], references: [id], onDelete: Restrict)
+  user       User?             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  scan_event ScanEvent?        @relation(fields: [scan_event_id], references: [id], onDelete: SetNull)
+  credit_txs CompanyCreditTx[]
 
   @@index([company_id])
   @@index([campaign_id])
@@ -468,27 +494,27 @@ model Lead {
 
 /// Tablet instalado no veículo do motorista, vinculado por código de pareamento
 model TabletDevice {
-  id                String   @id @default(cuid())
-  company_id        String
-  motorista_id      String?  // NULL enquanto não pareado
+  id           String  @id @default(cuid())
+  company_id   String
+  motorista_id String? // NULL enquanto não pareado
 
   /// Código de 6 dígitos. Vira NULL depois do pareamento: um tablet já
   /// vinculado não tem código pendente. UNIQUE aceita vários NULLs.
-  pairing_code      String?  @unique @db.VarChar(8)
+  pairing_code       String?   @unique @db.VarChar(8)
   pairing_expires_at DateTime? @db.Timestamp()
-  device_token      String?  @unique @db.VarChar(255) // Token do tablet após parear
+  device_token       String?   @unique @db.VarChar(255) // Token do tablet após parear
 
-  status            DeviceStatus @default(PENDING_PAIRING)
-  label             String?  @db.VarChar(120) // "Tablet do Corolla ABC-1234"
-  user_agent        String?  @db.VarChar(500)
-  last_seen_at      DateTime? @db.Timestamp()
-  paired_at         DateTime? @db.Timestamp()
+  status       DeviceStatus @default(PENDING_PAIRING)
+  label        String?      @db.VarChar(120) // "Tablet do Corolla ABC-1234"
+  user_agent   String?      @db.VarChar(500)
+  last_seen_at DateTime?    @db.Timestamp()
+  paired_at    DateTime?    @db.Timestamp()
 
-  created_at        DateTime @default(now()) @db.Timestamp()
-  updated_at        DateTime @updatedAt @db.Timestamp()
+  created_at DateTime @default(now()) @db.Timestamp()
+  updated_at DateTime @updatedAt @db.Timestamp()
 
-  company           Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  motorista         MotoristProfile? @relation(fields: [motorista_id], references: [id], onDelete: SetNull)
+  company           Company           @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  motorista         MotoristProfile?  @relation(fields: [motorista_id], references: [id], onDelete: SetNull)
   impression_events ImpressionEvent[]
   scan_events       ScanEvent[]
   sessions          TabletSession[]
@@ -502,27 +528,27 @@ model TabletDevice {
 /// Abre no pareamento e fecha quando o motorista encerra na própria tela.
 /// Pode haver várias no mesmo dia (almoço, troca de turno, folga no meio).
 model TabletSession {
-  id                String   @id @default(cuid())
-  company_id        String
-  motorista_id      String
-  device_id         String?
+  id           String  @id @default(cuid())
+  company_id   String
+  motorista_id String
+  device_id    String?
 
-  started_at        DateTime @default(now()) @db.Timestamp()
-  ended_at          DateTime? @db.Timestamp()
+  started_at DateTime  @default(now()) @db.Timestamp()
+  ended_at   DateTime? @db.Timestamp()
 
   /// Snapshot gravado no encerramento. Os eventos continuam sendo a fonte da
   /// verdade — isto é cache para a lista de jornadas carregar rápido.
-  impressions_count Int      @default(0)
-  scans_count       Int      @default(0)
-  unique_scans_count Int     @default(0)
-  leads_count       Int      @default(0)
+  impressions_count  Int @default(0)
+  scans_count        Int @default(0)
+  unique_scans_count Int @default(0)
+  leads_count        Int @default(0)
 
-  created_at        DateTime @default(now()) @db.Timestamp()
-  updated_at        DateTime @updatedAt @db.Timestamp()
+  created_at DateTime @default(now()) @db.Timestamp()
+  updated_at DateTime @updatedAt @db.Timestamp()
 
-  company           Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  motorista         MotoristProfile @relation(fields: [motorista_id], references: [id], onDelete: Cascade)
-  device            TabletDevice? @relation(fields: [device_id], references: [id], onDelete: SetNull)
+  company           Company           @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  motorista         MotoristProfile   @relation(fields: [motorista_id], references: [id], onDelete: Cascade)
+  device            TabletDevice?     @relation(fields: [device_id], references: [id], onDelete: SetNull)
   impression_events ImpressionEvent[]
   scan_events       ScanEvent[]
 
@@ -534,23 +560,23 @@ model TabletSession {
 
 /// Impressão: o anúncio foi exibido na tela do tablet
 model ImpressionEvent {
-  id                String   @id @default(cuid())
-  company_id        String
-  campaign_id       String
-  motorista_id      String
-  device_id         String?
-  session_id        String?  // Jornada em que foi exibido
+  id           String  @id @default(cuid())
+  company_id   String
+  campaign_id  String
+  motorista_id String
+  device_id    String?
+  session_id   String? // Jornada em que foi exibido
 
-  shown_at          DateTime @default(now()) @db.Timestamp()
-  duration_ms       Int      @default(0) // Quanto tempo ficou na tela
+  shown_at    DateTime @default(now()) @db.Timestamp()
+  duration_ms Int      @default(0) // Quanto tempo ficou na tela
 
-  created_at        DateTime @default(now()) @db.Timestamp()
+  created_at DateTime @default(now()) @db.Timestamp()
 
-  company           Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  campaign          Campaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
-  motorista         MotoristProfile @relation(fields: [motorista_id], references: [id], onDelete: Cascade)
-  device            TabletDevice? @relation(fields: [device_id], references: [id], onDelete: SetNull)
-  session           TabletSession? @relation(fields: [session_id], references: [id], onDelete: SetNull)
+  company   Company         @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  campaign  Campaign        @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+  motorista MotoristProfile @relation(fields: [motorista_id], references: [id], onDelete: Cascade)
+  device    TabletDevice?   @relation(fields: [device_id], references: [id], onDelete: SetNull)
+  session   TabletSession?  @relation(fields: [session_id], references: [id], onDelete: SetNull)
 
   @@index([company_id])
   @@index([campaign_id])
@@ -562,33 +588,33 @@ model ImpressionEvent {
 /// Scan: alguém leu o QR Code de fato. É a métrica de DIVULGAÇÃO.
 /// Anônimo por design — não exige cadastro do passageiro.
 model ScanEvent {
-  id                String   @id @default(cuid())
-  company_id        String
-  campaign_id       String
-  motorista_id      String
-  device_id         String?
-  session_id        String?  // Jornada em que o QR foi lido
+  id           String  @id @default(cuid())
+  company_id   String
+  campaign_id  String
+  motorista_id String
+  device_id    String?
+  session_id   String? // Jornada em que o QR foi lido
 
-  scanned_at        DateTime @default(now()) @db.Timestamp()
+  scanned_at DateTime @default(now()) @db.Timestamp()
 
   /// Hash de (ip + user-agent + dia) — permite contar únicos sem guardar PII crua
-  visitor_hash      String   @db.VarChar(64)
-  is_unique         Boolean  @default(true) // Primeiro scan desse visitante nesta campanha
+  visitor_hash String  @db.VarChar(64)
+  is_unique    Boolean @default(true) // Primeiro scan desse visitante nesta campanha
 
-  user_device       String?  @db.VarChar(500)
-  ip_address        String?  @db.VarChar(50)
-  referrer          String?  @db.VarChar(500)
-  latitude          Float?
-  longitude         Float?
+  user_device String? @db.VarChar(500)
+  ip_address  String? @db.VarChar(50)
+  referrer    String? @db.VarChar(500)
+  latitude    Float?
+  longitude   Float?
 
-  created_at        DateTime @default(now()) @db.Timestamp()
+  created_at DateTime @default(now()) @db.Timestamp()
 
-  company           Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  campaign          Campaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
-  motorista         MotoristProfile @relation(fields: [motorista_id], references: [id], onDelete: Cascade)
-  device            TabletDevice? @relation(fields: [device_id], references: [id], onDelete: SetNull)
-  session           TabletSession? @relation(fields: [session_id], references: [id], onDelete: SetNull)
-  lead              Lead?
+  company   Company         @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  campaign  Campaign        @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+  motorista MotoristProfile @relation(fields: [motorista_id], references: [id], onDelete: Cascade)
+  device    TabletDevice?   @relation(fields: [device_id], references: [id], onDelete: SetNull)
+  session   TabletSession?  @relation(fields: [session_id], references: [id], onDelete: SetNull)
+  lead      Lead?
 
   @@index([company_id])
   @@index([campaign_id])
@@ -605,33 +631,33 @@ model ScanEvent {
 
 /// Pagamentos para motoristas
 model Payment {
-  id                String   @id @default(cuid())
-  company_id        String
-  motorista_id      String
-  campaign_id       String?  // NULL se pagamento é fixo mensal
+  id           String  @id @default(cuid())
+  company_id   String
+  motorista_id String
+  campaign_id  String? // NULL se pagamento é fixo mensal
 
-  amount            Decimal  @db.Decimal(12, 2)
-  payment_type      PaymentType @default(PER_LEAD)
-  status            PaymentStatus @default(PENDING)
+  amount       Decimal       @db.Decimal(12, 2)
+  payment_type PaymentType   @default(PER_LEAD)
+  status       PaymentStatus @default(PENDING)
 
-  period_start      DateTime @db.Date()
-  period_end        DateTime @db.Date()
+  period_start DateTime @db.Date()
+  period_end   DateTime @db.Date()
 
-  leads_count       Int      @default(0)
+  leads_count Int @default(0)
 
   // Payment reference
-  external_id       String?  @db.VarChar(255) // ID do gateway de pagamento
-  paid_at           DateTime? @db.Timestamp()
-  rejected_reason   String?  @db.Text
+  external_id     String?   @db.VarChar(255) // ID do gateway de pagamento
+  paid_at         DateTime? @db.Timestamp()
+  rejected_reason String?   @db.Text
 
   // Timestamps
-  created_at        DateTime @default(now()) @db.Timestamp()
-  updated_at        DateTime @updatedAt @db.Timestamp()
+  created_at DateTime @default(now()) @db.Timestamp()
+  updated_at DateTime @updatedAt @db.Timestamp()
 
   // Relations
-  company           Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  motorista         MotoristProfile @relation("PaymentMotorista", fields: [motorista_id], references: [id], onDelete: Restrict)
-  campaign          Campaign? @relation(fields: [campaign_id], references: [id], onDelete: SetNull)
+  company   Company         @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  motorista MotoristProfile @relation("PaymentMotorista", fields: [motorista_id], references: [id], onDelete: Restrict)
+  campaign  Campaign?       @relation(fields: [campaign_id], references: [id], onDelete: SetNull)
 
   @@index([company_id])
   @@index([motorista_id])
@@ -640,33 +666,101 @@ model Payment {
   @@index([period_end])
 }
 
+/// Transações de saldo da empresa (pré-pago)
+model CompanyCreditTx {
+  id         String @id @default(cuid())
+  company_id String
+
+  type   CreditTransactionType
+  amount Decimal               @db.Decimal(12, 2)
+
+  // Referência do que gerou a transação
+  campaign_id String? // Se é debit de campanha
+  lead_id     String? // Se é lead convertido
+
+  // Se veio do Mercado Pago
+  mercadopago_id String? @db.VarChar(255) // ID do pagamento/transfer MP
+  metadata       Json? // Dados extras (parcelas, taxa, etc)
+
+  description String? @db.VarChar(255)
+
+  // Snapshot do saldo após esta transação
+  balance_after Decimal @db.Decimal(12, 2)
+
+  // Timestamps
+  created_at DateTime @default(now()) @db.Timestamp()
+
+  // Relations
+  company  Company   @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  campaign Campaign? @relation(fields: [campaign_id], references: [id], onDelete: SetNull)
+  lead     Lead?     @relation(fields: [lead_id], references: [id], onDelete: SetNull)
+
+  @@index([company_id])
+  @@index([type])
+  @@index([created_at])
+  @@index([campaign_id])
+}
+
+/// Conta bancária para recebimento de leads convertidos
+model DriverBankAccount {
+  id           String @id @default(cuid())
+  motorista_id String @unique
+  company_id   String
+
+  // Dados da conta
+  cpf          String @db.VarChar(14) // Proprietário (encrypted em produção)
+  bank_code    String @db.VarChar(3) // Código do banco (001 Banco do Brasil, 033 Santander, etc)
+  agency       String @db.VarChar(10)
+  account      String @db.VarChar(20)
+  account_type String @db.VarChar(20) // "CHECKING" ou "SAVINGS"
+  holder_name  String @db.VarChar(255) // Nome do titular da conta
+
+  status BankAccountStatus @default(PENDING_VERIFICATION)
+
+  // Referência no Mercado Pago (se criamos transfer account lá)
+  mercadopago_id String?   @db.VarChar(255)
+  verified_at    DateTime? @db.Timestamp()
+
+  // Timestamps
+  created_at DateTime @default(now()) @db.Timestamp()
+  updated_at DateTime @updatedAt @db.Timestamp()
+
+  // Relations
+  motorista MotoristProfile @relation(fields: [motorista_id], references: [id], onDelete: Cascade)
+  company   Company         @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@index([company_id])
+  @@index([motorista_id])
+  @@index([status])
+}
+
 // ============================================================================
 // AUDIT & COMPLIANCE
 // ============================================================================
 
 /// Logs de auditoria para compliance
 model AuditLog {
-  id                String   @id @default(cuid())
-  company_id        String
-  user_id           String
+  id         String @id @default(cuid())
+  company_id String
+  user_id    String
 
-  action            AuditAction
-  resource_type     String   @db.VarChar(100)
-  resource_id       String   @db.VarChar(255)
+  action        AuditAction
+  resource_type String      @db.VarChar(100)
+  resource_id   String      @db.VarChar(255)
 
-  old_values        Json?  // JSON das mudanças
-  new_values        Json?
-  description       String?  @db.Text
+  old_values  Json? // JSON das mudanças
+  new_values  Json?
+  description String? @db.Text
 
-  ip_address        String?  @db.VarChar(50)
-  user_agent        String?  @db.VarChar(500)
+  ip_address String? @db.VarChar(50)
+  user_agent String? @db.VarChar(500)
 
   // Timestamps
-  created_at        DateTime @default(now()) @db.Timestamp()
+  created_at DateTime @default(now()) @db.Timestamp()
 
   // Relations
-  company           Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  user              User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([company_id])
   @@index([user_id])
