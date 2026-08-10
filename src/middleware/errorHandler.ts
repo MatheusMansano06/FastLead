@@ -12,13 +12,23 @@ export const errorHandler = (
 ): void => {
   const isAppError = error instanceof AppError;
   const statusCode = isAppError ? error.statusCode : 500;
-  const message = error.message || 'Internal server error';
 
-  logger.error(`Error: ${message}`, error);
+  // O log sempre recebe o erro real, com tudo.
+  logger.error(`Error: ${error.message || 'Internal server error'}`, error);
+
+  // O CLIENTE não. Um AppError é lançado por nós de propósito e a mensagem é
+  // escrita para ser lida por quem está na tela ("senha inválida"). Qualquer
+  // outro erro é interno e a mensagem dele descreve a nossa infraestrutura:
+  // uma falha de conexão do Prisma chegava na tela de login expondo o host e o
+  // ref do banco. Em desenvolvimento continua tudo visível, senão não dá para
+  // depurar.
+  const exporDetalhe = isAppError || config.env === 'development';
 
   const errorResponse: ErrorResponse = {
-    error: error.name || 'Error',
-    message,
+    error: exporDetalhe ? error.name || 'Error' : 'InternalServerError',
+    message: exporDetalhe
+      ? error.message || 'Internal server error'
+      : 'Não foi possível completar a operação. Tente novamente em instantes.',
     statusCode,
     timestamp: new Date().toISOString(),
   };
