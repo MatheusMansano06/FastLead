@@ -5,7 +5,6 @@ import PlanBuilder from '../components/landing/PlanBuilder';
 import Marquee from '../components/landing/Marquee';
 import Reveal from '../components/landing/Reveal';
 import AdTablet from '../components/landing/AdTablet';
-import Exemplos from '../components/landing/Exemplos';
 import AppBadges from '../components/landing/AppBadges';
 import { calcularPlano, moeda } from '../lib/rateCard';
 
@@ -381,9 +380,6 @@ export default function Landing() {
             </div>
           </Reveal>
         </Secao>
-
-        {/* ═══════════════ EXEMPLOS ═══════════════ */}
-        <Exemplos />
 
         {/* ═══════════════ SIMULADOR ═══════════════ */}
         <PlanBuilder />
