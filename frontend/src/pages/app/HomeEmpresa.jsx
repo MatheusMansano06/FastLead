@@ -4,6 +4,7 @@ import { LogoWordmark } from '../../components/landing/Logo';
 import { useAuthStore } from '../../stores/authStore';
 import { apiClient } from '../../services/api';
 import BannerStudio from '../../components/app/BannerStudio';
+import CarteiraEmpresa from '../../components/app/CarteiraEmpresa';
 
 const ACCENT = '#2563FF';
 const INK = '#0B1D3A';
@@ -18,6 +19,7 @@ const I = {
   plus: 'M12 5v14M5 12h14',
   users: 'M17 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9.5 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8M22 20v-2a4 4 0 0 0-3-3.87',
   mega: 'M3 11v2a1 1 0 0 0 1 1h2l4 4V6L6 10H4a1 1 0 0 0-1 1zM15 8a5 5 0 0 1 0 8',
+  wallet: 'M3 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4M3 7h16a2 2 0 0 1 2 2v2h-5a2 2 0 0 0 0 4h5',
   out: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
   search: 'M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.35-4.35',
 };
@@ -127,6 +129,7 @@ const btnGhost =
 const NAV = [
   { key: 'Visão geral', icon: I.grid },
   { key: 'Criar anúncio', icon: I.plus },
+  { key: 'Carteira', icon: I.wallet },
   { key: 'Motoristas', icon: I.users },
   { key: 'Campanhas', icon: I.mega },
 ];
@@ -300,6 +303,7 @@ export default function HomeEmpresa() {
   const subtitles = {
     'Visão geral': 'Resumo das suas campanhas e resultados.',
     'Criar anúncio': 'Publique um anúncio para os motoristas aceitarem.',
+    Carteira: 'Seu saldo, recargas e para onde o dinheiro foi.',
     Motoristas: 'Parceiros disponíveis na rede FastLead.',
     Campanhas: 'Todos os seus anúncios e o desempenho de cada um.',
   };
@@ -679,6 +683,9 @@ export default function HomeEmpresa() {
               </Card>
             </div>
           )}
+
+          {/* ═════════ CARTEIRA ═════════ */}
+          {tab === 'Carteira' && <CarteiraEmpresa />}
 
           {/* ═════════ MOTORISTAS ═════════ */}
           {tab === 'Motoristas' && (

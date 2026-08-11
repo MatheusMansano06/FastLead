@@ -20,7 +20,7 @@ export default function FormRegistroBanco({ onSuccess, defaultValues = {} }) {
     setError(null);
 
     try {
-      await apiClient.post('/driver/bank', form);
+      await apiClient.saveDriverBank(form);
       onSuccess?.();
     } catch (err) {
       setError(err.response?.data?.error || 'Erro ao registrar conta');

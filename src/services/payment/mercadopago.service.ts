@@ -64,20 +64,22 @@ export class MercadoPagoService {
     external_reference: string;
     payer_email?: string;
   }): Promise<CobrancaPix> {
+    const corpoPix = JSON.stringify({
+        transaction_amount: params.amount,
+        description: params.description,
+        payment_method_id: 'pix',
+        external_reference: params.external_reference,
+        notification_url: MERCADOPAGO_CONFIG.notificationUrl || undefined,
+      payer: { email: params.payer_email || 'sem-email@fastlead.com.br' },
+    });
+
     const resposta = await fetch(`${API}/v1/payments`, {
       method: 'POST',
       headers: {
         ...this.headers,
         'X-Idempotency-Key': params.external_reference,
       },
-      body: JSON.stringify({
-        transaction_amount: params.amount,
-        description: params.description,
-        payment_method_id: 'pix',
-        external_reference: params.external_reference,
-        notification_url: MERCADOPAGO_CONFIG.notificationUrl || undefined,
-        payer: { email: params.payer_email || 'sem-email@fastlead.com.br' },
-      }),
+      body: corpoPix,
     });
 
     const corpo = (await resposta.json()) as Record<string, unknown> & ErroMP;

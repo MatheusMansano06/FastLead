@@ -411,6 +411,101 @@ class ApiClient {
     return r.data.data;
   }
 
+  // ===== Carteira da empresa =====
+  // As rotas de /billing respondem o objeto direto, sem o envelope { data }
+  // que o resto da API usa.
+
+  async getBalance() {
+    const r = await this.client.get('/billing/balance');
+    return r.data.balance as number;
+  }
+
+  async getBillingHistory(limit = 30) {
+    const r = await this.client.get('/billing/history', { params: { limit } });
+    return r.data.transactions as {
+      id: string;
+      type: 'DEPOSIT' | 'CAMPAIGN_DEBIT' | 'LEAD_PAYOUT' | 'REFUND' | 'ADJUSTMENT';
+      amount: string;
+      balance_after: string;
+      description: string | null;
+      created_at: string;
+      campaign?: { id: string; title: string } | null;
+      lead?: { id: string } | null;
+    }[];
+  }
+
+  // Gera a cobrança PIX. O QR vem como copia-e-cola e como imagem base64.
+  async createPixCheckout(amount: number) {
+    const r = await this.client.post('/billing/checkout', { amount });
+    return r.data as {
+      payment_id: string;
+      status: string;
+      amount: number;
+      qr_code: string;
+      qr_code_base64: string;
+      expira_em: string;
+    };
+  }
+
+  // Pergunta ao Mercado Pago se aquele PIX já foi pago. É o que destrava o
+  // saldo quando o webhook demora — creditar é idempotente, então chamar aqui
+  // e o webhook chegar depois não credita duas vezes.
+  async verifyPayment(payment_id: string) {
+    const r = await this.client.post('/billing/verify', { payment_id });
+    return r.data as { status: string; amount?: number; balance?: number };
+  }
+
+  // ===== Carteira do motorista =====
+
+  async getDriverWallet() {
+    const r = await this.client.get('/driver/wallet');
+    return r.data as { pendente: number; pago: number; total: number };
+  }
+
+  async getDriverEarnings(limit = 50, offset = 0) {
+    const r = await this.client.get('/driver/wallet/earnings', { params: { limit, offset } });
+    return r.data.earnings as {
+      id: string;
+      amount: string;
+      status: 'PENDING' | 'PAID' | 'CANCELLED';
+      description: string | null;
+      created_at: string;
+      paid_at: string | null;
+      payout_ref: string | null;
+      lead_id: string | null;
+    }[];
+  }
+
+  // Responde 404 quando o motorista ainda não cadastrou conta — que é um
+  // estado normal, não erro. Vira null para a tela tratar como "falta cadastrar".
+  async getDriverBank() {
+    const r = await this.client.get('/driver/bank', {
+      validateStatus: (s) => (s >= 200 && s < 300) || s === 404,
+    });
+    if (r.status === 404) return null;
+    return r.data as {
+      cpf: string;
+      bank_code: string;
+      agency: string;
+      account: string;
+      account_type: string;
+      holder_name: string;
+      status: string;
+    } | null;
+  }
+
+  async saveDriverBank(payload: {
+    cpf: string;
+    bank_code: string;
+    agency: string;
+    account: string;
+    account_type: string;
+    holder_name: string;
+  }) {
+    const r = await this.client.post('/driver/bank', payload);
+    return r.data;
+  }
+
   // ===== Error Handling =====
   private handleError(error: any): ApiError {
     const apiError: ApiError = {

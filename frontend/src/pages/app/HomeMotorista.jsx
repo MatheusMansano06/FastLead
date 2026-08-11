@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import AppHeader from '../../components/app/AppHeader';
 import { useAuthStore } from '../../stores/authStore';
 import { apiClient } from '../../services/api';
+import CarteiraMotorista from '../../components/app/CarteiraMotorista';
 
 const ACCENT = '#0a9d6c';
-const NAV = ['Início', 'Oportunidades', 'Meus anúncios', 'Minhas jornadas'];
+const NAV = ['Início', 'Oportunidades', 'Meus anúncios', 'Minhas jornadas', 'Carteira'];
 
 const brl = (n) =>
   Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
@@ -374,6 +375,19 @@ export default function HomeMotorista() {
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ───────── CARTEIRA ───────── */}
+        {tab === 'Carteira' && (
+          <div>
+            <div className="mb-5">
+              <h1 className="font-grotesk text-2xl font-bold text-ink">Sua carteira</h1>
+              <p className="mt-1 text-sm text-ink/55">
+                O que você já ganhou, o que ainda vai cair e a conta que recebe o PIX.
+              </p>
+            </div>
+            <CarteiraMotorista />
           </div>
         )}
       </main>
