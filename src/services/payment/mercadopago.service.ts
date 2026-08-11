@@ -127,6 +127,45 @@ export class MercadoPagoService {
   }
 
   /**
+   * Estorna um pagamento, total ou parcialmente.
+   *
+   * Este é o único caminho pelo qual dinheiro sai da conta por API: o valor
+   * volta para quem pagou, na mesma forma em que entrou. Não serve para pagar
+   * o motorista — para terceiros o Mercado Pago não tem API (ver o cabeçalho
+   * deste arquivo).
+   *
+   * A chave de idempotência é responsabilidade de quem chama: repetir com a
+   * mesma chave devolve o mesmo estorno em vez de estornar de novo.
+   */
+  async estornarPagamento(
+    payment_id: string,
+    amount: number,
+    idempotency_key: string,
+  ): Promise<{ id: string; amount: number; status: string }> {
+    const resposta = await fetch(`${API}/v1/payments/${payment_id}/refunds`, {
+      method: 'POST',
+      headers: { ...this.headers, 'X-Idempotency-Key': idempotency_key },
+      body: JSON.stringify({ amount }),
+    });
+
+    const corpo = (await resposta.json()) as Record<string, unknown> & ErroMP;
+
+    if (!resposta.ok) {
+      const detalhe = corpo.cause?.[0]?.description || corpo.message || resposta.statusText;
+      console.error(`[MP] Falha ao estornar ${payment_id} (${resposta.status}): ${detalhe}`);
+      throw new Error(`Mercado Pago: ${detalhe}`);
+    }
+
+    console.log(`[MP] Estorno criado: pagamento=${payment_id} valor=${amount} id=${corpo.id}`);
+
+    return {
+      id: String(corpo.id),
+      amount: Number(corpo.amount ?? amount),
+      status: String(corpo.status ?? 'approved'),
+    };
+  }
+
+  /**
    * Consulta o estado de um pagamento.
    *
    * Devolve também a `external_reference` para que quem chama confirme a quem

@@ -19,6 +19,7 @@ const ehEntrada = (tipo) => tipo === 'DEPOSIT' || tipo === 'REFUND';
 
 export default function CarteiraEmpresa() {
   const [saldo, setSaldo] = useState(null);
+  const [retiravel, setRetiravel] = useState(null);
   const [extrato, setExtrato] = useState(null);
   const [erro, setErro] = useState('');
 
@@ -29,16 +30,23 @@ export default function CarteiraEmpresa() {
   const [pago, setPago] = useState(false);
   const [copiado, setCopiado] = useState(false);
 
+  const [abrindoSaque, setAbrindoSaque] = useState(false);
+  const [valorSaque, setValorSaque] = useState('');
+  const [sacando, setSacando] = useState(false);
+  const [aviso, setAviso] = useState('');
+
   const pollRef = useRef(null);
 
   const carregar = useCallback(async () => {
     try {
-      const [s, e] = await Promise.all([
+      const [s, e, r] = await Promise.all([
         apiClient.getBalance(),
         apiClient.getBillingHistory(30),
+        apiClient.getRefundable(),
       ]);
       setSaldo(s);
       setExtrato(e);
+      setRetiravel(r);
       setErro('');
     } catch {
       setErro('Não foi possível carregar a carteira.');
@@ -99,6 +107,32 @@ export default function CarteiraEmpresa() {
     setTimeout(() => setCopiado(false), 2000);
   };
 
+  const sacar = async () => {
+    const n = Number(valorSaque);
+    if (!Number.isFinite(n) || n <= 0) return;
+
+    setSacando(true);
+    setErro('');
+    setAviso('');
+    try {
+      const r = await apiClient.refundBalance(n);
+      setAviso(
+        r.falhas > 0
+          ? `${brl(r.estornado)} devolvidos. Parte não pôde ser estornada e continua no seu saldo.`
+          : `${brl(r.estornado)} a caminho de volta para a origem do pagamento.`,
+      );
+      setAbrindoSaque(false);
+      setValorSaque('');
+      carregar();
+    } catch (e) {
+      const d = e?.response?.data;
+      const detalhe = [d?.message, d?.error].find((m) => m && m !== 'Error');
+      setErro(detalhe || 'Não foi possível concluir a retirada.');
+    } finally {
+      setSacando(false);
+    }
+  };
+
   const fechar = () => {
     clearInterval(pollRef.current);
     setCobranca(null);
@@ -112,6 +146,12 @@ export default function CarteiraEmpresa() {
       {erro && (
         <div className="rounded-lg border border-[#FECDCA] bg-[#FFFBFA] px-4 py-3 text-sm text-[#B42318]">
           {erro}
+        </div>
+      )}
+
+      {aviso && (
+        <div className="rounded-lg border border-[#ABEFC6] bg-[#F6FEF9] px-4 py-3 text-sm text-[#067647]">
+          {aviso}
         </div>
       )}
 
@@ -135,12 +175,63 @@ export default function CarteiraEmpresa() {
             Adicionar crédito
           </button>
           <button
+            onClick={() => {
+              setAbrindoSaque((v) => !v);
+              setAbrindoValor(false);
+            }}
+            disabled={!retiravel}
+            className="inline-flex items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-3.5 py-2 text-sm font-medium text-[#0B1D3A]/75 transition hover:bg-[#F7F8FA] disabled:opacity-50"
+          >
+            Retirar saldo
+          </button>
+          <button
             onClick={carregar}
             className="inline-flex items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-3.5 py-2 text-sm font-medium text-[#0B1D3A]/75 transition hover:bg-[#F7F8FA]"
           >
             Atualizar
           </button>
         </div>
+
+        {abrindoSaque && (
+          <div className="mt-5 border-t border-[#E4E7EC] pt-5">
+            <p className="text-xs font-semibold text-[#0B1D3A]/70">
+              Quanto você quer retirar?
+            </p>
+            <p className="mt-1 text-xs text-[#0B1D3A]/45">
+              O valor volta para a mesma conta e forma de pagamento que usou na
+              recarga. Não dá para escolher outro destino.
+            </p>
+            <p className="mt-2 text-xs font-semibold text-[#0B1D3A]/70">
+              Disponível para retirada: {retiravel == null ? '—' : brl(retiravel)}
+              {retiravel != null && saldo != null && retiravel < saldo && (
+                <span className="ml-1 font-normal text-[#0B1D3A]/45">
+                  — menor que o saldo porque só volta o que entrou por pagamento
+                  e ainda não foi estornado.
+                </span>
+              )}
+            </p>
+
+            <div className="mt-3 flex gap-2">
+              <input
+                type="number"
+                min="1"
+                step="0.01"
+                max={retiravel ?? undefined}
+                value={valorSaque}
+                onChange={(e) => setValorSaque(e.target.value)}
+                placeholder={retiravel ? `até ${retiravel.toFixed(2)}` : '0,00'}
+                className="w-40 rounded-lg border border-[#E4E7EC] bg-white px-3 py-2.5 text-sm text-ink outline-none transition placeholder:text-[#0B1D3A]/35 focus:border-[#2563FF] focus:ring-2 focus:ring-[#2563FF22]"
+              />
+              <button
+                disabled={sacando || !valorSaque}
+                onClick={sacar}
+                className="inline-flex items-center justify-center rounded-lg border border-[#E4E7EC] bg-white px-4 py-2.5 text-sm font-semibold text-[#0B1D3A]/80 transition hover:bg-[#F7F8FA] disabled:opacity-60"
+              >
+                {sacando ? 'Devolvendo…' : 'Confirmar retirada'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {abrindoValor && !cobranca && (
           <div className="mt-5 border-t border-[#E4E7EC] pt-5">

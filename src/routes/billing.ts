@@ -116,4 +116,60 @@ router.get(
   }),
 );
 
+/**
+ * GET /billing/refundable — quanto dá para retirar.
+ *
+ * Menor que o saldo sempre que parte dele não veio de pagamento (ajuste manual)
+ * ou já foi estornada. A tela usa isto como teto para não oferecer o que o
+ * Mercado Pago não tem como devolver.
+ */
+router.get(
+  '/refundable',
+  asyncHandler(async (req: Request, res: Response) => {
+    const refundable = await creditService.refundableAmount(req.user!.companyId!);
+    res.json({ refundable });
+  }),
+);
+
+/**
+ * POST /billing/refund
+ * Devolve saldo não usado, estornando os depósitos no Mercado Pago.
+ *
+ * Não recebe destino: o dinheiro volta para quem pagou, pela origem. Aceitar um
+ * destino aqui seria abrir um caminho para tirar dinheiro da conta para
+ * qualquer lugar.
+ */
+router.post(
+  '/refund',
+  asyncHandler(async (req: Request, res: Response) => {
+    const valor = Number(req.body?.amount);
+
+    if (!Number.isFinite(valor) || valor <= 0) {
+      res.status(400).json({ error: 'Valor inválido' });
+      return;
+    }
+
+    try {
+      const r = await creditService.refundToCompany(req.user!.companyId!, valor);
+
+      if (r.estornado === 0) {
+        res.status(502).json({
+          error: 'O Mercado Pago recusou o estorno',
+          message: 'Seu saldo não foi alterado. Tente de novo mais tarde.',
+        });
+        return;
+      }
+
+      res.json(r);
+    } catch (e) {
+      const msg = (e as Error).message;
+      const doUsuario =
+        msg.includes('Saldo insuficiente') ||
+        msg.includes('Nenhum depósito disponível') ||
+        msg.includes('Disponível para retirada');
+      res.status(doUsuario ? 400 : 502).json({ error: msg });
+    }
+  }),
+);
+
 export default router;

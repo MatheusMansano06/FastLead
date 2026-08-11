@@ -455,6 +455,20 @@ class ApiClient {
     return r.data as { status: string; amount?: number; balance?: number };
   }
 
+  // Menor que o saldo quando parte dele não veio de pagamento ou já foi
+  // estornada — é o teto real de retirada.
+  async getRefundable() {
+    const r = await this.client.get('/billing/refundable');
+    return r.data.refundable as number;
+  }
+
+  // Devolve saldo não usado para quem pagou, estornando no Mercado Pago. Não
+  // recebe destino de propósito: o dinheiro volta pela origem.
+  async refundBalance(amount: number) {
+    const r = await this.client.post('/billing/refund', { amount });
+    return r.data as { estornado: number; saldo: number; falhas: number };
+  }
+
   // ===== Carteira do motorista =====
 
   async getDriverWallet() {

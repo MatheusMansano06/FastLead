@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma';
 import { Decimal } from '@prisma/client/runtime/library';
 import { CreditTransactionType, DriverEarningStatus } from '@prisma/client';
+import { mercadoPagoService } from './mercadopago.service';
 
 /**
  * Comissão do motorista por lead convertido. Decisão de negócio: 30% flat.
@@ -82,6 +83,163 @@ export class CreditService {
       console.log(`[CREDIT] +R$ ${amount} para ${company_id} (mp=${mercadopago_id})`);
       return criada;
     });
+  }
+
+  /**
+   * Devolve saldo não usado para quem pagou, estornando os depósitos originais
+   * no Mercado Pago.
+   *
+   * O dinheiro só volta pelo caminho por onde veio — não há para onde desviar.
+   * Estorna do depósito mais recente para o mais antigo, porque o Mercado Pago
+   * tem janela de tempo para estorno e os recentes são os que ainda cabem nela.
+   *
+   * A chamada ao Mercado Pago é de rede e não pode ficar dentro da transação do
+   * banco (seguraria o lock enquanto espera a API). A ordem é: reservar o saldo
+   * primeiro, chamar o Mercado Pago depois, e devolver a reserva do que falhar.
+   * Reservar antes é o que impede a empresa gastar em lead o dinheiro que já
+   * está a caminho de volta.
+   */
+  /**
+   * Quanto a empresa consegue de fato retirar.
+   *
+   * Não é o saldo: só volta o que entrou por pagamento no Mercado Pago e ainda
+   * não foi estornado. Saldo posto à mão (ajuste, brinde) não tem para onde
+   * voltar, e o que já virou comissão de lead saiu.
+   */
+  async refundableAmount(company_id: string): Promise<number> {
+    const { estornavel } = await this.planoDeEstorno(company_id);
+    const saldo = new Decimal(await this.getBalance(company_id));
+    return Decimal.min(estornavel, saldo).toNumber();
+  }
+
+  /** Depósitos com saldo estornável, do mais recente para o mais antigo. */
+  private async planoDeEstorno(company_id: string) {
+    // Quanto de cada depósito ainda é estornável = valor do depósito menos o
+    // que já foi estornado dele antes.
+    const [depositos, estornos] = await Promise.all([
+      prisma.companyCreditTx.findMany({
+        where: { company_id, type: CreditTransactionType.DEPOSIT, mercadopago_id: { not: null } },
+        orderBy: { created_at: 'desc' },
+        select: { amount: true, mercadopago_id: true },
+      }),
+      prisma.companyCreditTx.findMany({
+        where: { company_id, type: CreditTransactionType.REFUND },
+        select: { amount: true, metadata: true },
+      }),
+    ]);
+
+    const jaEstornado = new Map<string, Decimal>();
+    for (const e of estornos) {
+      const pagamento = (e.metadata as { payment_id?: string } | null)?.payment_id;
+      if (!pagamento) continue;
+      jaEstornado.set(pagamento, (jaEstornado.get(pagamento) ?? new Decimal(0)).plus(e.amount));
+    }
+
+    const disponiveis: { payment_id: string; disponivel: Decimal }[] = [];
+    let estornavel = new Decimal(0);
+    for (const d of depositos) {
+      const id = d.mercadopago_id!;
+      const disponivel = new Decimal(d.amount).minus(jaEstornado.get(id) ?? 0);
+      if (disponivel.lte(0)) continue;
+      disponiveis.push({ payment_id: id, disponivel });
+      estornavel = estornavel.plus(disponivel);
+    }
+
+    return { disponiveis, estornavel };
+  }
+
+  async refundToCompany(
+    company_id: string,
+    amount: number,
+  ): Promise<{ estornado: number; saldo: number; falhas: number }> {
+    const pedido = new Decimal(amount);
+    const { disponiveis } = await this.planoDeEstorno(company_id);
+    const teto = new Decimal(await this.refundableAmount(company_id));
+
+    if (teto.lte(0)) {
+      throw new Error('Nenhum depósito disponível para estorno');
+    }
+
+    // Pedir mais do que dá para devolver é recusado, não atendido pela metade.
+    // Antes o valor era silenciosamente aparado até o que cabia: quem digitasse
+    // um número errado via sair dinheiro sem ter pedido aquilo.
+    if (pedido.gt(teto)) {
+      throw new Error(
+        `Disponível para retirada: R$ ${teto.toFixed(2)}. ` +
+          `Só volta o que entrou por pagamento e ainda não foi estornado.`,
+      );
+    }
+
+    const plano: { payment_id: string; valor: Decimal }[] = [];
+    let restante = pedido;
+    for (const d of disponiveis) {
+      if (restante.lte(0)) break;
+      const valor = Decimal.min(d.disponivel, restante);
+      plano.push({ payment_id: d.payment_id, valor });
+      restante = restante.minus(valor);
+    }
+
+    const aEstornar = pedido;
+
+    // Reserva: só sai daqui se o saldo cobrir. O WHERE é a trava — dois pedidos
+    // simultâneos não conseguem reservar o mesmo dinheiro.
+    const reserva = await prisma.company.updateMany({
+      where: { id: company_id, credit_balance: { gte: aEstornar } },
+      data: { credit_balance: { decrement: aEstornar } },
+    });
+
+    if (reserva.count === 0) {
+      throw new Error('Saldo insuficiente para estorno');
+    }
+
+    let estornado = new Decimal(0);
+    let falhas = 0;
+
+    for (const item of plano) {
+      try {
+        const r = await mercadoPagoService.estornarPagamento(
+          item.payment_id,
+          item.valor.toNumber(),
+          `refund_${company_id}_${item.payment_id}_${item.valor.toFixed(2)}`,
+        );
+
+        const saldoAtual = await prisma.company.findUniqueOrThrow({
+          where: { id: company_id },
+          select: { credit_balance: true },
+        });
+
+        await prisma.companyCreditTx.create({
+          data: {
+            company_id,
+            type: CreditTransactionType.REFUND,
+            amount: item.valor,
+            // O id do estorno, não o do pagamento: `mercadopago_id` é único e o
+            // pagamento já ocupa esse valor na linha do depósito.
+            mercadopago_id: `refund_${r.id}`,
+            metadata: { payment_id: item.payment_id, refund_id: r.id },
+            balance_after: saldoAtual.credit_balance,
+            description: `Estorno para a origem do pagamento`,
+          },
+        });
+
+        estornado = estornado.plus(item.valor);
+      } catch (e) {
+        falhas++;
+        console.error(
+          `[CREDIT] Estorno falhou para ${item.payment_id}: ${(e as Error).message} — devolvendo a reserva`,
+        );
+        // Devolve só o que não saiu; o resto permanece reservado corretamente.
+        await prisma.company.update({
+          where: { id: company_id },
+          data: { credit_balance: { increment: item.valor } },
+        });
+      }
+    }
+
+    const saldo = await this.getBalance(company_id);
+    console.log(`[CREDIT] Estorno de R$ ${estornado} para ${company_id} (falhas=${falhas})`);
+
+    return { estornado: estornado.toNumber(), saldo, falhas };
   }
 
   /**
