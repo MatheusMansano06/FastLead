@@ -65,24 +65,44 @@ export class MercadoPagoService {
     payer_email?: string;
   }): Promise<CobrancaPix> {
     const corpoPix = JSON.stringify({
-        transaction_amount: params.amount,
-        description: params.description,
-        payment_method_id: 'pix',
-        external_reference: params.external_reference,
-        notification_url: MERCADOPAGO_CONFIG.notificationUrl || undefined,
+      transaction_amount: params.amount,
+      description: params.description,
+      payment_method_id: 'pix',
+      external_reference: params.external_reference,
+      notification_url: MERCADOPAGO_CONFIG.notificationUrl || undefined,
       payer: { email: params.payer_email || 'sem-email@fastlead.com.br' },
     });
 
-    const resposta = await fetch(`${API}/v1/payments`, {
-      method: 'POST',
-      headers: {
-        ...this.headers,
-        'X-Idempotency-Key': params.external_reference,
-      },
-      body: corpoPix,
-    });
+    let resposta!: Response;
+    let corpo!: Record<string, unknown> & ErroMP;
 
-    const corpo = (await resposta.json()) as Record<string, unknown> & ErroMP;
+    // O Mercado Pago devolve 500 "internal_error" de forma intermitente —
+    // medido em ~1 a cada 4 chamadas. Sem repetir, essa proporção das recargas
+    // morria na cara de quem estava tentando pagar.
+    //
+    // Repetir é seguro porque o X-Idempotency-Key é o mesmo: se a cobrança
+    // chegou a ser criada, o Mercado Pago devolve aquela mesma em vez de abrir
+    // outra. Só 5xx é repetido; 4xx é erro nosso e repetir não conserta.
+    for (let tentativa = 1; tentativa <= 3; tentativa++) {
+      resposta = await fetch(`${API}/v1/payments`, {
+        method: 'POST',
+        headers: {
+          ...this.headers,
+          'X-Idempotency-Key': params.external_reference,
+        },
+        body: corpoPix,
+      });
+
+      corpo = (await resposta.json()) as Record<string, unknown> & ErroMP;
+
+      if (resposta.ok || resposta.status < 500) break;
+
+      const ultima = tentativa === 3;
+      console.warn(
+        `[MP] PIX falhou com ${resposta.status} (tentativa ${tentativa}/3)${ultima ? '' : ' — repetindo'}`,
+      );
+      if (!ultima) await new Promise((r) => setTimeout(r, 400 * tentativa));
+    }
 
     if (!resposta.ok) {
       const detalhe = corpo.cause?.[0]?.description || corpo.message || resposta.statusText;
