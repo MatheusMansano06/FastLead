@@ -13,6 +13,10 @@ import campaignsRoutes from './routes/campaigns';
 import paymentsRoutes from './routes/payments';
 import tabletRoutes from './routes/tablet';
 import publicRoutes from './routes/public';
+import billingRoutes from './routes/billing';
+import driverBankRoutes from './routes/driver-bank';
+import driverWalletRoutes from './routes/driver-wallet';
+import webhookMercadopagoRoutes from './routes/webhook-mercadopago';
 
 // Remove old routes that aren't needed
 // import leadsRoutes from './routes/leads';
@@ -58,6 +62,12 @@ app.use('/advertiser', advertiserRoutes);
 app.use('/admin', adminRoutes);
 app.use('/campaigns', campaignsRoutes);
 app.use('/payments', paymentsRoutes);
+app.use('/billing', billingRoutes);
+app.use('/driver', driverBankRoutes);
+app.use('/', driverWalletRoutes); // /driver/wallet e /admin/payouts/mark-paid
+
+// Webhook do Mercado Pago: sem JWT, autenticado por assinatura HMAC.
+app.use('/webhooks', webhookMercadopagoRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {

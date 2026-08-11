@@ -64,6 +64,15 @@ enum AuditAction {
   PAYMENT
 }
 
+/// Situação de um ganho do motorista. O Mercado Pago não transfere para conta
+/// bancária de terceiros via API (só o modelo Split, que exige conta MP do
+/// motorista), então o repasse é feito por PIX manual e marcado aqui.
+enum DriverEarningStatus {
+  PENDING // Creditado na carteira, aguardando repasse
+  PAID // Repassado por PIX; payout_ref guarda o comprovante
+  CANCELLED // Lead estornado ou ganho anulado
+}
+
 enum CreditTransactionType {
   DEPOSIT // Empresa adicionou crédito (recarregou cartão)
   CAMPAIGN_DEBIT // Débito ao criar anúncio
@@ -195,6 +204,7 @@ model Company {
   // Crédito pré-pago da empresa para criar anúncios
   credit_balance       Decimal             @default(0) @db.Decimal(12, 2)
   credit_txs           CompanyCreditTx[]
+  driver_earnings      DriverEarning[]
   driver_bank_accounts DriverBankAccount[]
 
   @@index([status])
@@ -279,6 +289,7 @@ model MotoristProfile {
   impression_events ImpressionEvent[]
   sessions          TabletSession[]
   bank_account      DriverBankAccount?
+  earnings          DriverEarning[]
 
   @@unique([company_id, user_id])
   @@index([company_id])
@@ -473,12 +484,13 @@ model Lead {
   deleted_at DateTime? @db.Timestamp()
 
   // Relations
-  company    Company           @relation(fields: [company_id], references: [id], onDelete: Cascade)
-  campaign   Campaign          @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
-  motorista  MotoristProfile   @relation(fields: [motorista_id], references: [id], onDelete: Restrict)
-  user       User?             @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  scan_event ScanEvent?        @relation(fields: [scan_event_id], references: [id], onDelete: SetNull)
-  credit_txs CompanyCreditTx[]
+  company         Company           @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  campaign        Campaign          @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+  motorista       MotoristProfile   @relation(fields: [motorista_id], references: [id], onDelete: Restrict)
+  user            User?             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  scan_event      ScanEvent?        @relation(fields: [scan_event_id], references: [id], onDelete: SetNull)
+  credit_txs      CompanyCreditTx[]
+  driver_earnings DriverEarning[]
 
   @@index([company_id])
   @@index([campaign_id])
@@ -667,6 +679,44 @@ model Payment {
 }
 
 /// Transações de saldo da empresa (pré-pago)
+/// Extrato da carteira do motorista: uma linha por ganho.
+///
+/// É a contraparte de `CompanyCreditTx` — quando um lead converte, a empresa é
+/// debitada ali e o motorista é creditado aqui, na mesma transação. O saldo a
+/// receber é a soma dos PENDING; `MotoristProfile.total_earnings` é só um
+/// acumulado histórico e não deve ser usado para decidir quanto pagar.
+///
+/// `amount` é gravado no momento do ganho e nunca recalculado pela taxa atual —
+/// mudar a comissão de 30% no futuro não pode reescrever o passado.
+model DriverEarning {
+  id           String  @id @default(cuid())
+  motorista_id String
+  company_id   String
+  lead_id      String?
+
+  amount          Decimal             @db.Decimal(12, 2)
+  commission_rate Decimal             @db.Decimal(5, 4) // Taxa vigente no momento (ex.: 0.3000)
+  status          DriverEarningStatus @default(PENDING)
+  description     String?             @db.VarChar(255)
+
+  // Repasse manual (PIX pelo painel do Mercado Pago)
+  paid_at    DateTime? @db.Timestamp()
+  payout_ref String?   @db.VarChar(120) // Comprovante/E2E do PIX
+  paid_by    String? // user_id de quem marcou como pago
+
+  created_at DateTime @default(now()) @db.Timestamp()
+  updated_at DateTime @updatedAt @db.Timestamp()
+
+  motorista MotoristProfile @relation(fields: [motorista_id], references: [id], onDelete: Cascade)
+  company   Company         @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  lead      Lead?           @relation(fields: [lead_id], references: [id], onDelete: SetNull)
+
+  @@index([motorista_id, status])
+  @@index([company_id])
+  @@index([lead_id])
+  @@index([created_at])
+}
+
 model CompanyCreditTx {
   id         String @id @default(cuid())
   company_id String
@@ -678,8 +728,10 @@ model CompanyCreditTx {
   campaign_id String? // Se é debit de campanha
   lead_id     String? // Se é lead convertido
 
-  // Se veio do Mercado Pago
-  mercadopago_id String? @db.VarChar(255) // ID do pagamento/transfer MP
+  /// ID do pagamento no Mercado Pago. Único: é a trava de idempotência que
+  /// impede creditar o mesmo depósito duas vezes quando o webhook e o /verify
+  /// do cliente chegam para o mesmo pagamento.
+  mercadopago_id String? @unique @db.VarChar(255)
   metadata       Json? // Dados extras (parcelas, taxa, etc)
 
   description String? @db.VarChar(255)
