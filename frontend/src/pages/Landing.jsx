@@ -149,12 +149,6 @@ export default function Landing() {
                   Falar com especialista
                 </a>
               </div>
-
-              <p className="mt-6 text-[13.5px] text-ink/45">
-                Planos a partir de{' '}
-                <strong className="font-bold text-ink">{moeda(PLANO_ENTRADA.total)}</strong> por
-                semana · 10 veículos · sem fidelidade mínima
-              </p>
             </Reveal>
 
             <Reveal delay={80}>
