@@ -3,13 +3,7 @@ import crypto from 'crypto';
 
 /**
  * Serviço Mercado Pago — integração com gateway de pagamento
- *
- * ESTADO ATUAL: Mocks estruturados
- * - createPayment, verifyPayment, createTransfer: retornam dados simulados
- * - verifyWebhookSignature: estruturado, pronto para token real
- * - À noite: troque os mocks por chamadas reais à API do Mercado Pago
- *
- * Instalação da API real: npm install mercadopago
+ * Chamadas reais à API REST do Mercado Pago
  */
 
 export interface MercadoPagoPayment {
@@ -25,54 +19,93 @@ export interface MercadoPagoVerify {
 export class MercadoPagoService {
   /**
    * Cria um payment no Mercado Pago para o checkout de crédito.
-   * Retorna a URL de checkout (init_point).
-   *
-   * MOCK: retorna dados simulados. À noite, integre com:
-   * https://www.mercadopago.com.br/developers/pt/reference/preference/_checkout_preference/post
+   * Retorna o ID da transação.
    */
   async createPayment(params: {
-    amount: number; // Em reais
+    amount: number;
     description: string;
-    external_reference: string; // company_id + timestamp
+    external_reference: string;
     payer_email?: string;
-    auto_return: string; // 'approved' or 'all'
+    auto_return: string;
   }): Promise<MercadoPagoPayment> {
-    const mockId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const mockCheckoutUrl = `https://www.mercadopago.com/checkout/v1/redirect?preference-id=${mockId}`;
-
-    console.log(
-      `[MP MOCK] createPayment: R$ ${params.amount} | ${params.description} | ref=${params.external_reference}`,
-    );
-
-    return {
-      id: mockId,
-      init_point: mockCheckoutUrl,
+    const url = 'https://api.mercadopago.com/v1/payments';
+    const body = {
+      transaction_amount: params.amount,
+      description: params.description,
+      external_reference: params.external_reference,
+      payer: {
+        email: params.payer_email || 'noreply@fastlead.com.br',
+      },
+      notification_url: MERCADOPAGO_CONFIG.notificationUrl,
     };
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${MERCADOPAGO_CONFIG.accessToken}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error(`[MP] Erro ao criar payment: ${response.status}`, error);
+        throw new Error(`Mercado Pago error: ${error.message || response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log(`[MP] Payment criado: id=${data.id}, status=${data.status}`);
+
+      return {
+        id: data.id,
+        init_point: `https://api.mercadopago.com/checkout/v1/redirect?preference-id=${data.id}`,
+      };
+    } catch (error) {
+      console.error('[MP] Erro ao criar payment:', error);
+      throw error;
+    }
   }
 
   /**
    * Verifica o status de um payment já criado.
-   *
-   * MOCK: simula status "approved". À noite, chamar GET /v1/payments/{id}
    */
   async verifyPayment(payment_id: string): Promise<MercadoPagoVerify> {
-    console.log(`[MP MOCK] verifyPayment: id=${payment_id}`);
+    const url = `https://api.mercadopago.com/v1/payments/${payment_id}`;
 
-    // Mock: sempre retorna approved por enquanto
-    return {
-      status: 'approved',
-      amount: 100, // Mock valor fixo — em produção vem da API
-    };
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${MERCADOPAGO_CONFIG.accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error(`[MP] Erro ao verificar payment: ${response.status}`, error);
+        throw new Error(`Mercado Pago error: ${error.message || response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log(`[MP] Payment verificado: id=${data.id}, status=${data.status}`);
+
+      return {
+        status: data.status,
+        amount: data.transaction_amount,
+      };
+    } catch (error) {
+      console.error('[MP] Erro ao verificar payment:', error);
+      throw error;
+    }
   }
 
   /**
    * Cria uma transfer para a conta bancária do motorista.
-   *
-   * MOCK: retorna ID fake. À noite:
-   * https://www.mercadopago.com.br/developers/pt/reference/transfers/_transfers/post
    */
   async createTransfer(params: {
-    amount: number; // Em reais
+    amount: number;
     target_account: {
       cpf: string;
       bank_code: string;
@@ -82,15 +115,53 @@ export class MercadoPagoService {
       holder_name: string;
     };
     description: string;
-    external_reference: string; // lead_id
+    external_reference: string;
   }): Promise<{ transfer_id: string }> {
-    const transferId = `transfer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const url = 'https://api.mercadopago.com/v1/transfers';
+    const body = {
+      amount: params.amount,
+      description: params.description,
+      external_reference: params.external_reference,
+      recipient_type: 'INDIVIDUAL',
+      receiver: {
+        type: 'bank_account',
+        id: `${params.target_account.bank_code}-${params.target_account.agency}-${params.target_account.account}-${params.target_account.account_type}`,
+        bank_account: {
+          document_type: 'CPF',
+          document_id: params.target_account.cpf,
+          account_holder_name: params.target_account.holder_name,
+          account_number: params.target_account.account,
+          agency_number: params.target_account.agency,
+          bank_code: params.target_account.bank_code,
+          account_type: params.target_account.account_type === 'CHECKING' ? 'CUENTA_CORRIENTE' : 'CUENTA_AHORRO',
+        },
+      },
+    };
 
-    console.log(
-      `[MP MOCK] createTransfer: R$ ${params.amount} | ${params.target_account.holder_name} | ref=${params.external_reference}`,
-    );
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${MERCADOPAGO_CONFIG.accessToken}`,
+        },
+        body: JSON.stringify(body),
+      });
 
-    return { transfer_id: transferId };
+      if (!response.ok) {
+        const error = await response.json();
+        console.error(`[MP] Erro ao criar transfer: ${response.status}`, error);
+        throw new Error(`Mercado Pago error: ${error.message || response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log(`[MP] Transfer criado: id=${data.id}, status=${data.status}`);
+
+      return { transfer_id: data.id };
+    } catch (error) {
+      console.error('[MP] Erro ao criar transfer:', error);
+      throw error;
+    }
   }
 
   /**
