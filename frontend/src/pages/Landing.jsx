@@ -6,6 +6,7 @@ import Marquee from '../components/landing/Marquee';
 import Reveal from '../components/landing/Reveal';
 import AdTablet from '../components/landing/AdTablet';
 import AppBadges from '../components/landing/AppBadges';
+import AssistenteFastLead from '../components/landing/AssistenteFastLead';
 import { calcularPlano, moeda } from '../lib/rateCard';
 import passageiroTabletImg from '/passageiro-tablet.webp';
 
@@ -101,6 +102,7 @@ const ETAPAS_ISL = [
 export default function Landing() {
   return (
     <div className="w-full bg-white text-ink antialiased">
+      <AssistenteFastLead />
       <SiteHeader />
 
       <main className="pt-[68px]">
