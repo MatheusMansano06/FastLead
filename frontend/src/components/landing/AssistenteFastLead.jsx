@@ -75,6 +75,15 @@ export default function AssistenteFastLead() {
     ]);
   };
 
+  const voltarAoInicio = () => {
+    setMensagens([
+      {
+        tipo: 'bot',
+        texto: 'Oi! 👋 Sou o Assistente FastLead. Tem dúvidas?',
+      },
+    ]);
+  };
+
   const temPerguntaNaoRespondida = !mensagens.some(
     (m) => m.tipo === 'bot' && Object.values(RESPOSTAS).some((r) => r.resposta === m.texto)
   );
@@ -153,6 +162,19 @@ export default function AssistenteFastLead() {
                   {RESPOSTAS[chave].pergunta}
                 </button>
               ))}
+            </div>
+          )}
+
+          {/* Botão de voltar */}
+          {!temPerguntaNaoRespondida && (
+            <div className="border-t border-gray-200 bg-white p-3">
+              <button
+                onClick={voltarAoInicio}
+                className="w-full rounded-lg px-3 py-2 text-xs font-semibold transition hover:bg-gray-100"
+                style={{ color: ACCENT }}
+              >
+                ← Fazer outra pergunta
+              </button>
             </div>
           )}
         </div>
