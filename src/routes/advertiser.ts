@@ -4,6 +4,8 @@ import { AnuncianteService } from '../services/anuncianteService';
 import { MarketplaceService } from '../services/marketplaceService';
 import { UserType } from '../types';
 import logger from '../config/logger';
+import { prisma } from '../lib/prisma';
+import { creditService } from '../services/payment/credit.service';
 
 const router = Router();
 
@@ -256,6 +258,83 @@ router.get(
     res.status(200).json({
       message: 'Campaign leads retrieved',
       data: leads,
+    });
+  })
+);
+
+/**
+ * PATCH /advertiser/leads/:leadId/convert
+ * O anunciante confirma que o lead virou negócio.
+ *
+ * É o gatilho do dinheiro: debita a comissão do saldo da empresa e credita o
+ * motorista, atomicamente. Antes daqui não existia nenhuma rota que convertesse
+ * um lead, então `debitLeadConversion` nunca era chamada e nada se movia.
+ *
+ * O `conversion_value` é o valor do negócio fechado; a comissão do motorista
+ * sai dele. Sem valor, não há o que repartir.
+ */
+router.patch(
+  '/leads/:leadId/convert',
+  verifyJWT,
+  authorize(UserType.ADVERTISER, UserType.ADMIN),
+  asyncHandler(async (req: Request, res: Response) => {
+    const leadId = String(req.params.leadId);
+    const valor = Number(req.body?.conversion_value);
+
+    if (!Number.isFinite(valor) || valor <= 0) {
+      res.status(400).json({ error: 'conversion_value obrigatório e maior que zero' });
+      return;
+    }
+
+    const lead = await prisma.lead.findUnique({
+      where: { id: leadId },
+      select: { id: true, company_id: true, status: true },
+    });
+
+    if (!lead || lead.company_id !== req.user!.companyId) {
+      res.status(404).json({ error: 'Lead não encontrado' });
+      return;
+    }
+
+    // Converter duas vezes pagaria o motorista duas vezes pelo mesmo lead.
+    if (lead.status === 'CONVERTED') {
+      res.status(409).json({ error: 'Lead já convertido' });
+      return;
+    }
+
+    const debitou = await creditService.debitLeadConversion(lead.company_id, lead.id, valor);
+
+    if (!debitou) {
+      res.status(402).json({
+        error: 'Saldo insuficiente',
+        message: 'Adicione crédito antes de converter o lead',
+      });
+      return;
+    }
+
+    await prisma.lead.update({
+      where: { id: lead.id },
+      data: {
+        status: 'CONVERTED',
+        conversion_value: valor,
+        converted_at: new Date(),
+      },
+    });
+
+    logger.info(`Lead ${lead.id} convertido por ${req.user?.id} (R$ ${valor})`);
+
+    const [saldoEmpresa, saldoMotorista] = await Promise.all([
+      creditService.getBalance(lead.company_id),
+      prisma.lead
+        .findUniqueOrThrow({ where: { id: lead.id }, select: { motorista_id: true } })
+        .then((l) => creditService.getDriverBalance(l.motorista_id)),
+    ]);
+
+    res.json({
+      lead_id: lead.id,
+      conversion_value: valor,
+      saldo_empresa: saldoEmpresa,
+      motorista: saldoMotorista,
     });
   })
 );
