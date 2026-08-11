@@ -1,5 +1,7 @@
 import crypto from 'crypto';
+import QRCode from 'qrcode';
 import prisma from '../lib/prisma';
+import config from '../config/config';
 import logger from '../config/logger';
 import { NotFoundError, ValidationError } from '../utils/errors';
 import { QRService } from './qrService';
@@ -54,11 +56,25 @@ export class TabletService {
         select: { id: true, pairing_code: true, pairing_expires_at: true },
       });
 
+      // O motorista lê o QR com o próprio tablet para abrir a tela de
+      // pareamento sem digitar endereço — teclar URL em tablet preso ao painel
+      // é justamente o passo em que as pessoas desistem. O código continua
+      // sendo digitado à mão: são 6 dígitos, e assim o QR não carrega segredo
+      // nenhum, podendo ficar exposto na tela do celular.
+      const tabletUrl = `${config.appBaseUrl}/tablet`;
+
       return {
         deviceId: device.id,
         code: device.pairing_code,
         expiresAt: device.pairing_expires_at,
         expiresInMinutes: PAIRING_TTL_MINUTES,
+        tabletUrl,
+        tabletUrlQrCode: await QRCode.toDataURL(tabletUrl, {
+          errorCorrectionLevel: 'M',
+          margin: 2,
+          width: 320,
+          color: { dark: '#0B1D3A', light: '#FFFFFF' },
+        }),
       };
     }
 

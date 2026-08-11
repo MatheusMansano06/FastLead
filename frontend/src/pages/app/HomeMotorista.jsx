@@ -4,6 +4,7 @@ import AppHeader from '../../components/app/AppHeader';
 import { useAuthStore } from '../../stores/authStore';
 import { apiClient } from '../../services/api';
 import CarteiraMotorista from '../../components/app/CarteiraMotorista';
+import ModalPareamento from '../../components/app/ModalPareamento';
 
 const ACCENT = '#0a9d6c';
 const NAV = ['Início', 'Oportunidades', 'Meus anúncios', 'Minhas jornadas', 'Carteira'];
@@ -45,6 +46,8 @@ export default function HomeMotorista() {
   const [removendo, setRemovendo] = useState(false);
   const [sessions, setSessions] = useState(null);
   const [carteira, setCarteira] = useState(null);
+  const [toastErro, setToastErro] = useState(false);
+  const [mostrarPareamento, setMostrarPareamento] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) navigate('/entrar/motorista', { replace: true });
@@ -86,12 +89,14 @@ export default function HomeMotorista() {
     setBusy(id);
     try {
       await apiClient.acceptOpportunity(id);
+      setToastErro(false);
       setToast('Anúncio adicionado! Já está rodando no seu tablet.');
       await Promise.all([loadOps(), loadMine()]);
       setTimeout(() => setToast(''), 3500);
     } catch (e) {
+      setToastErro(true);
       setToast(e?.message || 'Não foi possível aceitar agora.');
-      setTimeout(() => setToast(''), 3500);
+      setTimeout(() => setToast(''), 5000);
     } finally {
       setBusy(null);
     }
@@ -113,12 +118,26 @@ export default function HomeMotorista() {
     <div className="min-h-screen bg-[#f4f5f7] text-ink">
       <AppHeader accent={ACCENT} badge="Motorista parceiro" nav={NAV} active={tab} onNav={setTab} />
 
+      {/* Verde é "deu certo". O aviso de erro vinha verde também, então uma
+          recusa da API se parecia com confirmação. */}
       {toast && (
-        <div className="fixed inset-x-0 top-16 z-50 mx-auto w-fit rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-lg"
-          style={{ background: ACCENT }}>
+        <div className="fixed inset-x-0 top-16 z-50 mx-auto max-w-lg w-fit rounded-2xl px-5 py-2.5 text-center text-sm font-semibold text-white shadow-lg"
+          style={{ background: toastErro ? '#B42318' : ACCENT }}>
           {toast}
         </div>
       )}
+
+      <ModalPareamento
+        aberto={mostrarPareamento}
+        aoFechar={() => setMostrarPareamento(false)}
+        aoParear={() => {
+          setMostrarPareamento(false);
+          setToastErro(false);
+          setToast('Tablet pareado! Agora é só escolher os anúncios.');
+          setTimeout(() => setToast(''), 3500);
+          loadTablets();
+        }}
+      />
 
       <main className="mx-auto max-w-7xl px-5 py-8 md:px-8">
         {/* Tab bar (mobile + clareza) */}
@@ -231,7 +250,7 @@ export default function HomeMotorista() {
                   </p>
                 </div>
                 <button
-                  onClick={() => navigate('/app/motorista/perfil')}
+                  onClick={() => setMostrarPareamento(true)}
                   className="shrink-0 rounded-xl bg-amber-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-800"
                 >
                   Parear tablet
@@ -261,10 +280,17 @@ export default function HomeMotorista() {
                       <span className="rounded-full bg-black/5 px-2.5 py-1">{o.remaining} vaga(s) restante(s)</span>
                       <span className="rounded-full bg-black/5 px-2.5 py-1">{o.acceptedCount} já rodando</span>
                     </div>
-                    <button onClick={() => accept(o.id)} disabled={busy === o.id}
+                    {/* Sem tablet pareado a API recusa com 400. Em vez de
+                        travar o botão — que deixa o motorista sem saber o que
+                        fazer — ele abre o passo a passo do pareamento. */}
+                    <button
+                      onClick={() => (temTablet === false ? setMostrarPareamento(true) : accept(o.id))}
+                      disabled={busy === o.id}
                       className="mt-5 rounded-full py-3 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
                       style={{ background: ACCENT, boxShadow: '0 16px 40px -14px rgba(10,157,108,0.7)' }}>
-                      {busy === o.id ? 'Aceitando…' : 'Rodar este anúncio'}
+                      {busy === o.id ? 'Aceitando…'
+                        : temTablet === false ? 'Parear tablet para rodar'
+                        : 'Rodar este anúncio'}
                     </button>
                   </div>
                 ))}

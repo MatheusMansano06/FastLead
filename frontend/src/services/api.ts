@@ -53,6 +53,18 @@ class ApiClient {
           }
         }
 
+        // A API explica o problema em português ("Você precisa parear o
+        // tablet..."), mas o axios sobrescreve isso com "Request failed with
+        // status code 400". Só 8 dos 47 métodos daqui tratavam o erro, então a
+        // maioria das telas mostrava o texto do axios e o usuário não ficava
+        // sabendo o que fazer. Traz a mensagem do servidor para `message`, que
+        // é o que as telas leem.
+        const dados = error.response?.data as
+          | { message?: string; error?: string }
+          | undefined;
+        const doServidor = dados?.message || dados?.error;
+        if (doServidor) error.message = doServidor;
+
         return Promise.reject(error);
       }
     );
@@ -359,6 +371,10 @@ class ApiClient {
       code: string;
       expiresAt: string;
       expiresInMinutes: number;
+      // QR que o motorista lê com o próprio tablet para abrir a tela de
+      // pareamento — o código continua sendo digitado à mão.
+      tabletUrl: string;
+      tabletUrlQrCode: string;
     };
   }
 
