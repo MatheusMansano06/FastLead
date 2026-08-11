@@ -48,6 +48,14 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum CampaignRating {
+  ONE
+  TWO
+  THREE
+  FOUR
+  FIVE
+}
+
 enum PaymentType {
   FIXED
   PER_LEAD
@@ -290,6 +298,7 @@ model MotoristProfile {
   sessions          TabletSession[]
   bank_account      DriverBankAccount?
   earnings          DriverEarning[]
+  reviews           CampaignReview[]
 
   @@unique([company_id, user_id])
   @@index([company_id])
@@ -398,6 +407,7 @@ model Campaign {
   scan_events       ScanEvent[]
   impression_events ImpressionEvent[]
   credit_txs        CompanyCreditTx[]
+  reviews           CampaignReview[]
 
   @@unique([company_id, qr_code_data])
   @@index([company_id])
@@ -818,5 +828,28 @@ model AuditLog {
   @@index([user_id])
   @@index([action])
   @@index([resource_type])
+  @@index([created_at])
+}
+
+/// Avaliações e comentários de campanhas já finalizadas
+model CampaignReview {
+  id String @id @default(cuid())
+
+  campaign_id String
+  motorista_id String
+
+  rating CampaignRating
+  comment String? @db.Text
+
+  created_at DateTime @default(now()) @db.Timestamp()
+  updated_at DateTime @updatedAt @db.Timestamp()
+
+  // Relations
+  campaign Campaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+  motorista MotoristProfile @relation(fields: [motorista_id], references: [id], onDelete: Cascade)
+
+  @@unique([campaign_id, motorista_id])
+  @@index([campaign_id])
+  @@index([motorista_id])
   @@index([created_at])
 }

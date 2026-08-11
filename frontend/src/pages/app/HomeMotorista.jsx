@@ -5,6 +5,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { apiClient } from '../../services/api';
 import CarteiraMotorista from '../../components/app/CarteiraMotorista';
 import ModalPareamento from '../../components/app/ModalPareamento';
+import AvaliacaoCampanha from '../../components/app/AvaliacaoCampanha';
 
 const ACCENT = '#0a9d6c';
 const NAV = ['Início', 'Oportunidades', 'Meus anúncios', 'Minhas jornadas', 'Carteira'];
@@ -48,6 +49,7 @@ export default function HomeMotorista() {
   const [carteira, setCarteira] = useState(null);
   const [toastErro, setToastErro] = useState(false);
   const [mostrarPareamento, setMostrarPareamento] = useState(false);
+  const [avaliacaoCampanha, setAvaliacaoCampanha] = useState(null);
 
   useEffect(() => {
     if (!isAuthenticated) navigate('/entrar/motorista', { replace: true });
@@ -138,6 +140,38 @@ export default function HomeMotorista() {
           loadTablets();
         }}
       />
+
+      {/* Modal de avaliação */}
+      {avaliacaoCampanha && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm md:items-center"
+          onClick={() => setAvaliacaoCampanha(null)}
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-white md:rounded-3xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-4 border-b border-ink/10 px-6 py-5 sticky top-0 bg-white">
+              <h2 className="font-grotesk text-xl font-bold text-ink">Avalie esta campanha</h2>
+              <button
+                onClick={() => setAvaliacaoCampanha(null)}
+                className="rounded-full p-1.5 text-ink/40 transition hover:bg-black/5 hover:text-ink"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-6">
+              <AvaliacaoCampanha
+                campaignId={avaliacaoCampanha}
+                jaParticipou={true}
+                onClose={() => setAvaliacaoCampanha(null)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="mx-auto max-w-7xl px-5 py-8 md:px-8">
         {/* Tab bar (mobile + clareza) */}
@@ -264,7 +298,16 @@ export default function HomeMotorista() {
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
                 {ops.map((o) => (
-                  <div key={o.id} className="flex flex-col rounded-2xl border border-black/5 bg-white p-6 shadow-[0_20px_50px_-40px_rgba(6,40,29,0.5)]">
+                  <div key={o.id} className="flex flex-col rounded-2xl bg-white p-6 shadow-[0_20px_50px_-40px_rgba(6,40,29,0.5)]"
+                    style={{
+                      borderWidth: '2px',
+                      borderColor: o.participated ? '#FCD34D' : '#00000010',
+                    }}>
+                    {o.participated && (
+                      <div className="mb-3 inline-flex w-fit rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900">
+                        ⭐ Já participou
+                      </div>
+                    )}
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: ACCENT }}>{o.company}</span>
@@ -280,15 +323,21 @@ export default function HomeMotorista() {
                       <span className="rounded-full bg-black/5 px-2.5 py-1">{o.remaining} vaga(s) restante(s)</span>
                       <span className="rounded-full bg-black/5 px-2.5 py-1">{o.acceptedCount} já rodando</span>
                     </div>
-                    {/* Sem tablet pareado a API recusa com 400. Em vez de
-                        travar o botão — que deixa o motorista sem saber o que
-                        fazer — ele abre o passo a passo do pareamento. */}
                     <button
-                      onClick={() => (temTablet === false ? setMostrarPareamento(true) : accept(o.id))}
+                      onClick={() => {
+                        if (o.participated) {
+                          setAvaliacaoCampanha(o.id);
+                        } else if (temTablet === false) {
+                          setMostrarPareamento(true);
+                        } else {
+                          accept(o.id);
+                        }
+                      }}
                       disabled={busy === o.id}
                       className="mt-5 rounded-full py-3 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
                       style={{ background: ACCENT, boxShadow: '0 16px 40px -14px rgba(10,157,108,0.7)' }}>
                       {busy === o.id ? 'Aceitando…'
+                        : o.participated ? '⭐ Avaliar'
                         : temTablet === false ? 'Parear tablet para rodar'
                         : 'Rodar este anúncio'}
                     </button>

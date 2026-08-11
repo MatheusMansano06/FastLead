@@ -3,6 +3,7 @@ import { verifyJWT, authorize, asyncHandler } from '../middleware';
 import { MotoristaService } from '../services/motoristaService';
 import { MarketplaceService } from '../services/marketplaceService';
 import { TabletService } from '../services/tabletService';
+import { ReviewService } from '../services/reviewService';
 import { UserType } from '../types';
 import logger from '../config/logger';
 
@@ -261,6 +262,58 @@ router.patch(
     res.status(200).json({
       message: 'Status updated successfully',
       data: updated,
+    });
+  })
+);
+
+/** GET /driver/campaigns/:campaignId/reviews — avaliações da campanha */
+router.get(
+  '/campaigns/:campaignId/reviews',
+  verifyJWT,
+  authorize(UserType.DRIVER),
+  asyncHandler(async (req: Request, res: Response) => {
+    const reviews = await ReviewService.getReviews(String(req.params.campaignId));
+    const stats = await ReviewService.getCampaignStats(String(req.params.campaignId));
+    const myReview = await ReviewService.getMotoristaReview(
+      String(req.params.campaignId),
+      req.user!.id
+    );
+
+    res.status(200).json({
+      data: {
+        reviews,
+        stats,
+        myReview: myReview
+          ? { rating: myReview.rating, comment: myReview.comment }
+          : null,
+      },
+    });
+  })
+);
+
+/** POST /driver/campaigns/:campaignId/reviews — criar/atualizar avaliação */
+router.post(
+  '/campaigns/:campaignId/reviews',
+  verifyJWT,
+  authorize(UserType.DRIVER),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { rating, comment } = req.body;
+
+    if (!rating || !['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE'].includes(rating)) {
+      res.status(400).json({ error: 'Rating inválido' });
+      return;
+    }
+
+    const review = await ReviewService.createOrUpdateReview(
+      String(req.params.campaignId),
+      req.user!.id,
+      rating,
+      comment
+    );
+
+    res.status(201).json({
+      message: 'Avaliação registrada',
+      data: review,
     });
   })
 );

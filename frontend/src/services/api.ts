@@ -286,6 +286,30 @@ class ApiClient {
     return r.data.data;
   }
 
+  async getCampaignReviews(campaignId: string) {
+    const r = await this.client.get(`/driver/campaigns/${campaignId}/reviews`);
+    return r.data.data as {
+      reviews: Array<{
+        id: string;
+        rating: string;
+        comment?: string;
+        motoristaName: string;
+        motoristaId: string;
+        createdAt: string;
+      }>;
+      stats: { avgRating: number; totalReviews: number; distribution: Record<string, number> };
+      myReview: { rating: string; comment?: string } | null;
+    };
+  }
+
+  async submitCampaignReview(campaignId: string, rating: string, comment?: string) {
+    const r = await this.client.post(`/driver/campaigns/${campaignId}/reviews`, {
+      rating,
+      comment,
+    });
+    return r.data.data;
+  }
+
   // ===== Marketplace: Anunciante =====
   async getMotoristas(city?: string) {
     const r = await this.client.get('/advertiser/motoristas', { params: city ? { city } : {} });

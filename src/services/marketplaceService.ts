@@ -64,11 +64,23 @@ export class MarketplaceService {
     });
     const acceptedIds = accepted.map((a) => a.campaign_id);
 
+    // Campanhas que o motorista já participou (tem Lead convertido)
+    const participated = await prisma.lead.findMany({
+      where: { motorista_id: profile.id, status: 'CONVERTED' },
+      select: { campaign_id: true },
+      distinct: ['campaign_id'],
+    });
+    const participatedIds = participated.map((p) => p.campaign_id);
+
     const campaigns = await prisma.campaign.findMany({
       where: {
         status: 'ACTIVE',
         deleted_at: null,
-        id: { notIn: acceptedIds.length ? acceptedIds : ['__none__'] },
+        // Mostra campanhas abertas OU campanhas que o motorista já participou
+        OR: [
+          { id: { notIn: acceptedIds.length ? acceptedIds : ['__none__'] } },
+          { id: { in: participatedIds } },
+        ],
       },
       include: {
         anunciante: { select: { company_name: true, industry: true } },
@@ -93,6 +105,8 @@ export class MarketplaceService {
       startDate: c.start_date,
       endDate: c.end_date,
       createdAt: c.created_at,
+      participated: participatedIds.includes(c.id), // Marca campanhas já participadas
+      alreadyAccepted: acceptedIds.includes(c.id), // Marca campanhas aceitas agora
     }));
   }
 
