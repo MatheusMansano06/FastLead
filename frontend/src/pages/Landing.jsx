@@ -7,6 +7,7 @@ import Reveal from '../components/landing/Reveal';
 import AdTablet from '../components/landing/AdTablet';
 import AppBadges from '../components/landing/AppBadges';
 import { calcularPlano, moeda } from '../lib/rateCard';
+import passageiroTabletImg from '/passageiro-tablet.webp';
 
 /**
  * Landing pública.
@@ -157,7 +158,7 @@ export default function Landing() {
             <Reveal delay={80}>
               <div className="relative">
                 <img
-                  src="/passageiro-tablet.webp"
+                  src={passageiroTabletImg}
                   alt="Passageira no banco de trás de um carro de aplicativo apontando a câmera do celular para o QR code exibido no tablet FastLead"
                   width="1373"
                   height="1146"
