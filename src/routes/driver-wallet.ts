@@ -57,35 +57,4 @@ router.get(
   }),
 );
 
-/**
- * POST /admin/payouts/mark-paid
- * Marca ganhos como repassados após o PIX feito à mão no painel do Mercado Pago.
- *
- * Restrito a ADMIN: é o registro de que o dinheiro saiu de verdade.
- */
-router.post(
-  '/admin/payouts/mark-paid',
-  authorize(UserType.ADMIN),
-  asyncHandler(async (req: Request, res: Response) => {
-    const { earning_ids, payout_ref } = req.body;
-
-    if (!Array.isArray(earning_ids) || earning_ids.length === 0) {
-      res.status(400).json({ error: 'earning_ids obrigatório (lista não vazia)' });
-      return;
-    }
-    if (!payout_ref || typeof payout_ref !== 'string') {
-      res.status(400).json({ error: 'payout_ref obrigatório (comprovante do PIX)' });
-      return;
-    }
-
-    const resultado = await creditService.markEarningsPaid(
-      earning_ids.map(String),
-      payout_ref,
-      req.user!.id,
-    );
-
-    res.json(resultado);
-  }),
-);
-
 export default router;

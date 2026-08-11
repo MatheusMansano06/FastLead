@@ -64,9 +64,11 @@ app.use('/campaigns', campaignsRoutes);
 app.use('/payments', paymentsRoutes);
 app.use('/billing', billingRoutes);
 app.use('/driver', driverBankRoutes);
-app.use('/', driverWalletRoutes); // /driver/wallet e /admin/payouts/mark-paid
+app.use('/driver', driverWalletRoutes);
 
-// Webhook do Mercado Pago: sem JWT, autenticado por assinatura HMAC.
+// Webhook do Mercado Pago: sem JWT, autenticado por assinatura HMAC. Fica
+// fora de qualquer router que aplique verifyJWT — montar um router com
+// verifyJWT na raiz barrava esta rota antes da checagem de assinatura.
 app.use('/webhooks', webhookMercadopagoRoutes);
 
 // 404 handler

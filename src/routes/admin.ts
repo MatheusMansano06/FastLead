@@ -3,6 +3,7 @@ import { verifyJWT, authorize, asyncHandler } from '../middleware';
 import { UserType } from '../types';
 import { AdminService, MasterFilters } from '../services/adminService';
 import { Region, RideApp, RideCategory } from '@prisma/client';
+import { creditService } from '../services/payment/credit.service';
 
 const router = Router();
 
@@ -101,6 +102,39 @@ router.post(
     }
     const result = await AdminService.setAssignment(req.user!.id, campaignId, motoristaId, action);
     res.json({ data: result });
+  })
+);
+
+/**
+ * POST /admin/payouts/mark-paid
+ * Marca ganhos do motorista como repassados, depois do PIX feito à mão no
+ * painel do Mercado Pago.
+ *
+ * O Mercado Pago não transfere para conta bancária de terceiros por API, então
+ * o dinheiro sai à mão e este endpoint é o registro de que saiu. `payout_ref`
+ * guarda o comprovante para auditoria.
+ */
+router.post(
+  '/payouts/mark-paid',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { earning_ids, payout_ref } = req.body;
+
+    if (!Array.isArray(earning_ids) || earning_ids.length === 0) {
+      res.status(400).json({ error: 'earning_ids obrigatório (lista não vazia)' });
+      return;
+    }
+    if (!payout_ref || typeof payout_ref !== 'string') {
+      res.status(400).json({ error: 'payout_ref obrigatório (comprovante do PIX)' });
+      return;
+    }
+
+    const resultado = await creditService.markEarningsPaid(
+      earning_ids.map(String),
+      payout_ref,
+      req.user!.id
+    );
+
+    res.json(resultado);
   })
 );
 
