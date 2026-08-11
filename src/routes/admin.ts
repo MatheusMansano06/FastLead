@@ -4,6 +4,7 @@ import { UserType } from '../types';
 import { AdminService, MasterFilters } from '../services/adminService';
 import { Region, RideApp, RideCategory } from '@prisma/client';
 import { creditService } from '../services/payment/credit.service';
+import { prisma } from '../lib/prisma';
 
 const router = Router();
 
@@ -102,6 +103,75 @@ router.post(
     }
     const result = await AdminService.setAssignment(req.user!.id, campaignId, motoristaId, action);
     res.json({ data: result });
+  })
+);
+
+/**
+ * GET /admin/payouts/pending
+ * Ganhos ainda não repassados, agrupados por motorista.
+ *
+ * O mark-paid recebe uma lista de ids de ganho, e não havia nenhuma forma de
+ * descobrir esses ids — o endpoint de repasse era inutilizável na prática.
+ * Vem com a conta bancária junto porque é dela que sai o PIX.
+ */
+router.get(
+  '/payouts/pending',
+  asyncHandler(async (_req: Request, res: Response) => {
+    const pendentes = await prisma.driverEarning.findMany({
+      where: { status: 'PENDING' },
+      orderBy: { created_at: 'asc' },
+      select: {
+        id: true,
+        amount: true,
+        created_at: true,
+        lead_id: true,
+        motorista: {
+          select: {
+            id: true,
+            user: { select: { name: true } },
+            bank_account: {
+              select: {
+                status: true,
+                bank_code: true,
+                agency: true,
+                account: true,
+                holder_name: true,
+                cpf: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Agrupa por motorista: o repasse é um PIX por pessoa, não por lead.
+    const porMotorista = new Map<string, any>();
+    for (const g of pendentes) {
+      const id = g.motorista.id;
+      if (!porMotorista.has(id)) {
+        porMotorista.set(id, {
+          motoristaId: id,
+          nome: g.motorista.user?.name ?? null,
+          conta: g.motorista.bank_account ?? null,
+          total: 0,
+          earningIds: [] as string[],
+          maisAntigo: g.created_at,
+        });
+      }
+      const m = porMotorista.get(id);
+      m.total += Number(g.amount);
+      m.earningIds.push(g.id);
+    }
+
+    const motoristas = [...porMotorista.values()].sort((a, b) => b.total - a.total);
+
+    res.json({
+      message: 'Repasses pendentes',
+      data: {
+        motoristas,
+        totalAPagar: motoristas.reduce((s, m) => s + m.total, 0),
+      },
+    });
   })
 );
 

@@ -5,6 +5,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { apiClient } from '../../services/api';
 import BannerStudio from '../../components/app/BannerStudio';
 import CarteiraEmpresa from '../../components/app/CarteiraEmpresa';
+import LeadsEmpresa from '../../components/app/LeadsEmpresa';
 
 const ACCENT = '#2563FF';
 const INK = '#0B1D3A';
@@ -20,6 +21,7 @@ const I = {
   users: 'M17 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9.5 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8M22 20v-2a4 4 0 0 0-3-3.87',
   mega: 'M3 11v2a1 1 0 0 0 1 1h2l4 4V6L6 10H4a1 1 0 0 0-1 1zM15 8a5 5 0 0 1 0 8',
   wallet: 'M3 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4M3 7h16a2 2 0 0 1 2 2v2h-5a2 2 0 0 0 0 4h5',
+  spark: 'M13 2 4.5 13H11l-1 9 8.5-11H12l1-9z',
   out: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
   search: 'M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.35-4.35',
 };
@@ -129,6 +131,7 @@ const btnGhost =
 const NAV = [
   { key: 'Visão geral', icon: I.grid },
   { key: 'Criar anúncio', icon: I.plus },
+  { key: 'Leads', icon: I.spark },
   { key: 'Carteira', icon: I.wallet },
   { key: 'Motoristas', icon: I.users },
   { key: 'Campanhas', icon: I.mega },
@@ -140,6 +143,7 @@ export default function HomeEmpresa() {
   const [tab, setTab] = useState('Visão geral');
   const [campaigns, setCampaigns] = useState(null);
   const [motoristas, setMotoristas] = useState(null);
+  const [resumo, setResumo] = useState(null);
   const [detail, setDetail] = useState(null);
   const [toast, setToast] = useState('');
   const [qMot, setQMot] = useState('');
@@ -204,7 +208,10 @@ export default function HomeEmpresa() {
   const loadMotoristas = useCallback(async () => {
     try { setMotoristas(await apiClient.getMotoristas()); } catch { setMotoristas([]); }
   }, []);
-  useEffect(() => { loadCampaigns(); loadMotoristas(); }, [loadCampaigns, loadMotoristas]);
+  const loadResumo = useCallback(async () => {
+    try { setResumo(await apiClient.getBillingSummary()); } catch { setResumo(null); }
+  }, []);
+  useEffect(() => { loadCampaigns(); loadMotoristas(); loadResumo(); }, [loadCampaigns, loadMotoristas, loadResumo]);
 
   const flash = (m) => { setToast(m); setTimeout(() => setToast(''), 3500); };
 
@@ -284,7 +291,10 @@ export default function HomeEmpresa() {
   const loading = campaigns == null;
   const totalMotoristas = campaigns?.reduce((s, c) => s + (c.motoristasCount || 0), 0) ?? 0;
   const totalLeads = campaigns?.reduce((s, c) => s + (c.totalLeads || 0), 0) ?? 0;
-  const investido = campaigns?.reduce((s, c) => s + (c.totalLeads || 0) * Number(c.pricePerLead || 0), 0) ?? 0;
+  // Gasto real, vindo do extrato da carteira. Antes era `leads × preço por
+  // lead` calculado aqui, o que cobrava por lead nunca convertido e ignorava
+  // que a comissão sai sobre o valor da venda.
+  const investido = resumo?.spentOnLeads ?? null;
   const ativas = campaigns?.filter((c) => c.status === 'ACTIVE').length ?? 0;
 
   const motFiltrados = useMemo(() => {
@@ -303,6 +313,7 @@ export default function HomeEmpresa() {
   const subtitles = {
     'Visão geral': 'Resumo das suas campanhas e resultados.',
     'Criar anúncio': 'Publique um anúncio para os motoristas aceitarem.',
+    Leads: 'Quem escaneou seu QR. Marque aqui quando virar venda.',
     Carteira: 'Seu saldo, recargas e para onde o dinheiro foi.',
     Motoristas: 'Parceiros disponíveis na rede FastLead.',
     Campanhas: 'Todos os seus anúncios e o desempenho de cada um.',
@@ -411,8 +422,8 @@ export default function HomeEmpresa() {
                   hint={`${motoristas?.length ?? 0} na rede`} />
                 <StatCard label="Leads gerados" value={loading ? '—' : totalLeads}
                   hint="Passageiros que escanearam" />
-                <StatCard label="Investido em leads" value={loading ? '—' : brl(investido)}
-                  hint="Você paga por lead convertido" />
+                <StatCard label="Investido em leads" value={investido == null ? '—' : brl(investido)}
+                  hint="Comissão já paga por venda fechada" />
               </div>
 
               <Card pad={false}>
@@ -683,6 +694,9 @@ export default function HomeEmpresa() {
               </Card>
             </div>
           )}
+
+          {/* ═════════ LEADS ═════════ */}
+          {tab === 'Leads' && <LeadsEmpresa onConvertido={loadResumo} />}
 
           {/* ═════════ CARTEIRA ═════════ */}
           {tab === 'Carteira' && <CarteiraEmpresa />}

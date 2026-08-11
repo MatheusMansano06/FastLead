@@ -212,15 +212,44 @@ class ApiClient {
     }
   }
 
-  async getLeads(page = 1, limit = 20) {
-    try {
-      const response = await this.client.get('/advertiser/leads', {
-        params: { page, limit },
-      });
-      return response.data;
-    } catch (error) {
-      throw this.handleError(error);
-    }
+  // Leads da empresa, de todas as campanhas. A paginação é por offset — antes
+  // mandava `page`, que a API não lê.
+  async getLeads(limit = 50, offset = 0, status?: string) {
+    const r = await this.client.get('/advertiser/leads', {
+      params: { limit, offset, ...(status ? { status } : {}) },
+    });
+    return r.data.data as {
+      leads: {
+        id: string;
+        status: 'PENDING' | 'CONVERTED' | 'INVALID';
+        scanTime: string;
+        contactName: string | null;
+        contactEmail: string | null;
+        contactPhone: string | null;
+        conversionValue: number | null;
+        convertedAt: string | null;
+        campaignId: string | null;
+        campaignTitle: string | null;
+        motoristaName: string | null;
+      }[];
+      total: number;
+    };
+  }
+
+  /**
+   * Marca o lead como venda fechada. É o que dispara o dinheiro: debita a
+   * comissão da empresa e credita o motorista, na mesma transação.
+   */
+  async convertLead(leadId: string, conversionValue: number) {
+    const r = await this.client.patch(`/advertiser/leads/${leadId}/convert`, {
+      conversion_value: conversionValue,
+    });
+    return r.data as {
+      lead_id: string;
+      conversion_value: number;
+      saldo_empresa: number;
+      motorista: { pendente: number; pago: number; total: number };
+    };
   }
 
   // ===== Marketplace: Motorista =====
@@ -406,6 +435,39 @@ class ApiClient {
     };
   }
 
+  // Repasses pendentes agrupados por motorista — é um PIX por pessoa, não por
+  // lead. Traz a conta bancária junto porque é dela que sai o pagamento.
+  async masterPendingPayouts() {
+    const r = await this.client.get('/admin/payouts/pending');
+    return r.data.data as {
+      motoristas: {
+        motoristaId: string;
+        nome: string | null;
+        conta: {
+          status: string;
+          bank_code: string;
+          agency: string;
+          account: string;
+          holder_name: string;
+          cpf: string;
+        } | null;
+        total: number;
+        earningIds: string[];
+        maisAntigo: string;
+      }[];
+      totalAPagar: number;
+    };
+  }
+
+  // Registra que o PIX foi feito à mão. `payoutRef` é o comprovante.
+  async masterMarkPaid(earningIds: string[], payoutRef: string) {
+    const r = await this.client.post('/admin/payouts/mark-paid', {
+      earning_ids: earningIds,
+      payout_ref: payoutRef,
+    });
+    return r.data as { pagos: number; valor: number };
+  }
+
   async masterSetAssignment(campaignId: string, motoristaId: string, action: 'FORCE' | 'BLOCK' | 'CLEAR') {
     const r = await this.client.post('/admin/assignments', { campaignId, motoristaId, action });
     return r.data.data;
@@ -418,6 +480,13 @@ class ApiClient {
   async getBalance() {
     const r = await this.client.get('/billing/balance');
     return r.data.balance as number;
+  }
+
+  // Saldo, teto de retirada e gasto real em comissão — os três que o painel
+  // mostra junto. `spentOnLeads` vem do extrato, não de cálculo aqui.
+  async getBillingSummary() {
+    const r = await this.client.get('/billing/summary');
+    return r.data as { balance: number; refundable: number; spentOnLeads: number };
   }
 
   async getBillingHistory(limit = 30) {
@@ -473,7 +542,12 @@ class ApiClient {
 
   async getDriverWallet() {
     const r = await this.client.get('/driver/wallet');
-    return r.data as { pendente: number; pago: number; total: number };
+    return r.data as {
+      pendente: number;
+      pago: number;
+      total: number;
+      leadsConvertidos: number;
+    };
   }
 
   async getDriverEarnings(limit = 50, offset = 0) {

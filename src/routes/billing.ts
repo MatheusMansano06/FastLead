@@ -117,6 +117,25 @@ router.get(
 );
 
 /**
+ * GET /billing/summary — saldo, teto de retirada e quanto já foi gasto.
+ *
+ * Uma chamada só porque o painel mostra os três juntos. `spentOnLeads` vem do
+ * extrato, não de multiplicação no navegador.
+ */
+router.get(
+  '/summary',
+  asyncHandler(async (req: Request, res: Response) => {
+    const company_id = req.user!.companyId!;
+    const [balance, refundable, spentOnLeads] = await Promise.all([
+      creditService.getBalance(company_id),
+      creditService.refundableAmount(company_id),
+      creditService.getSpentOnLeads(company_id),
+    ]);
+    res.json({ balance, refundable, spentOnLeads });
+  }),
+);
+
+/**
  * GET /billing/refundable — quanto dá para retirar.
  *
  * Menor que o saldo sempre que parte dele não veio de pagamento (ajuste manual)

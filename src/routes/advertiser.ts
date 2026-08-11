@@ -263,6 +263,74 @@ router.get(
 );
 
 /**
+ * GET /advertiser/leads
+ * Todos os leads da empresa, de todas as campanhas.
+ *
+ * Converter lead é tarefa diária e atravessa campanhas — o anunciante liga para
+ * quem escaneou, e marca a venda quando fecha. Só existia a listagem por
+ * campanha, que obriga a entrar em uma de cada vez. O frontend já chamava esta
+ * rota e recebia 404.
+ */
+router.get(
+  '/leads',
+  verifyJWT,
+  authorize(UserType.ADVERTISER, UserType.ADMIN),
+  asyncHandler(async (req: Request, res: Response) => {
+    const limit = Math.min(parseInt(String(req.query.limit)) || 50, 100);
+    const offset = parseInt(String(req.query.offset)) || 0;
+    const status = getQueryString(req.query.status);
+
+    const where = {
+      company_id: req.user!.companyId!,
+      deleted_at: null,
+      ...(status ? { status: status as never } : {}),
+    };
+
+    const [leads, total] = await Promise.all([
+      prisma.lead.findMany({
+        where,
+        orderBy: { qr_scan_time: 'desc' },
+        take: limit,
+        skip: offset,
+        select: {
+          id: true,
+          status: true,
+          qr_scan_time: true,
+          contact_name: true,
+          contact_email: true,
+          contact_phone: true,
+          conversion_value: true,
+          converted_at: true,
+          campaign: { select: { id: true, title: true } },
+          motorista: { select: { user: { select: { name: true } } } },
+        },
+      }),
+      prisma.lead.count({ where }),
+    ]);
+
+    res.status(200).json({
+      message: 'Leads',
+      data: {
+        leads: leads.map((l) => ({
+          id: l.id,
+          status: l.status,
+          scanTime: l.qr_scan_time,
+          contactName: l.contact_name,
+          contactEmail: l.contact_email,
+          contactPhone: l.contact_phone,
+          conversionValue: l.conversion_value ? Number(l.conversion_value) : null,
+          convertedAt: l.converted_at,
+          campaignId: l.campaign?.id ?? null,
+          campaignTitle: l.campaign?.title ?? null,
+          motoristaName: l.motorista?.user?.name ?? null,
+        })),
+        total,
+      },
+    });
+  })
+);
+
+/**
  * PATCH /advertiser/leads/:leadId/convert
  * O anunciante confirma que o lead virou negócio.
  *

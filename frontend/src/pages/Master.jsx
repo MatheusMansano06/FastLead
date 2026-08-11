@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 
+const brlMaster = (v) =>
+  Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
 /**
  * Painel MASTER — visão de todas as empresas e motoristas.
  *
@@ -133,6 +136,8 @@ export default function Master() {
   const [loading, setLoading] = useState(true);
   const [distributing, setDistributing] = useState(null);
   const [notice, setNotice] = useState('');
+  const [repasses, setRepasses] = useState(null);
+  const [pagando, setPagando] = useState(null);
 
   const activeFilters = useMemo(
     () => Object.fromEntries(Object.entries(filters).filter(([, v]) => v)),
@@ -189,11 +194,46 @@ export default function Master() {
     }
   };
 
+  const carregarRepasses = useCallback(async () => {
+    try {
+      setRepasses(await apiClient.masterPendingPayouts());
+    } catch {
+      setRepasses(null);
+    }
+  }, []);
+
+  /**
+   * Registra que o PIX ao motorista foi feito à mão.
+   *
+   * O Mercado Pago não transfere para conta de terceiros por API, então o
+   * pagamento sai do painel deles e isto aqui é só o registro — sem esta tela
+   * o "a receber" do motorista nunca zerava.
+   */
+  const marcarPago = async (m) => {
+    const ref = window.prompt(
+      `Confirme o comprovante do PIX de ${brlMaster(m.total)} para ${m.nome || 'o motorista'}.\n\n` +
+        'Cole o identificador da transferência (E2E, id do comprovante):'
+    );
+    if (!ref || !ref.trim()) return;
+
+    setPagando(m.motoristaId);
+    try {
+      const r = await apiClient.masterMarkPaid(m.earningIds, ref.trim());
+      setNotice(`${r.pagos} ganho(s) marcados como pagos — ${brlMaster(r.valor)}`);
+      carregarRepasses();
+    } catch (e) {
+      setNotice(e?.response?.data?.error || 'Falha ao marcar como pago');
+    } finally {
+      setPagando(null);
+    }
+  };
+
   useEffect(() => {
     if (tab === 'drivers') apiClient.masterDrivers(activeFilters).then(setDrivers).catch(() => {});
     if (tab === 'companies') apiClient.masterCompanies().then(setCompanies).catch(() => {});
     if (tab === 'campaigns') apiClient.masterCampaigns().then(setCampaigns).catch(() => {});
-  }, [tab, activeFilters]);
+    if (tab === 'payouts') carregarRepasses();
+  }, [tab, activeFilters, carregarRepasses]);
 
   // Modalidades dependem dos apps: só faz sentido oferecer UberX se o filtro de app
   // estiver em Uber ou vazio.
@@ -384,6 +424,7 @@ export default function Master() {
               ['drivers', 'Motoristas'],
               ['companies', 'Empresas'],
               ['campaigns', 'Campanhas'],
+              ['payouts', 'Repasses'],
             ].map(([key, label]) => (
               <button
                 key={key}
@@ -582,6 +623,89 @@ export default function Master() {
                   })}
                 </tbody>
               </table>
+            )}
+
+            {tab === 'payouts' && (
+              <div>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
+                  <div>
+                    <p className="text-sm font-medium">Ganhos aguardando repasse</p>
+                    <p className="mt-0.5 text-xs text-white/40">
+                      O Mercado Pago não transfere para conta de terceiros por API. Faça
+                      o PIX no painel deles e registre aqui com o comprovante.
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs uppercase tracking-wider text-white/40">Total a pagar</p>
+                    <p className="font-grotesk text-xl font-bold">
+                      {repasses == null ? '—' : brlMaster(repasses.totalAPagar)}
+                    </p>
+                  </div>
+                </div>
+
+                {repasses == null ? (
+                  <div className="px-5 py-10 text-center text-sm text-white/35">Carregando…</div>
+                ) : repasses.motoristas.length === 0 ? (
+                  <div className="px-5 py-10 text-center text-sm text-white/35">
+                    Nenhum repasse pendente.
+                  </div>
+                ) : (
+                  <table className="w-full min-w-[820px] text-sm">
+                    <thead className="text-xs uppercase tracking-wider text-white/40">
+                      <tr className="border-b border-white/10">
+                        <th className="px-5 py-3 text-left font-medium">Motorista</th>
+                        <th className="px-4 py-3 text-left font-medium">Conta para o PIX</th>
+                        <th className="px-4 py-3 text-right font-medium">Ganhos</th>
+                        <th className="px-4 py-3 text-right font-medium">A pagar</th>
+                        <th className="px-5 py-3 text-right font-medium">Ação</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {repasses.motoristas.map((m) => (
+                        <tr key={m.motoristaId} className="border-b border-white/5 hover:bg-white/5">
+                          <td className="px-5 py-3">
+                            <div className="font-medium">{m.nome || '—'}</div>
+                            <div className="text-xs text-white/40">
+                              desde {new Date(m.maisAntigo).toLocaleDateString('pt-BR')}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            {m.conta ? (
+                              <div className="text-xs text-white/70">
+                                <div>{m.conta.holder_name}</div>
+                                <div className="text-white/40">
+                                  Banco {m.conta.bank_code} · Ag. {m.conta.agency} · Conta{' '}
+                                  {m.conta.account}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-amber-300/80">
+                                Sem conta cadastrada — o motorista precisa preencher
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right text-white/60">
+                            {m.earningIds.length}
+                          </td>
+                          <td className="px-4 py-3 text-right font-semibold">
+                            {brlMaster(m.total)}
+                          </td>
+                          <td className="px-5 py-3 text-right">
+                            <button
+                              onClick={() => marcarPago(m)}
+                              disabled={pagando === m.motoristaId || !m.conta}
+                              title={!m.conta ? 'O motorista ainda não cadastrou conta' : undefined}
+                              className="whitespace-nowrap rounded-lg bg-brand/20 px-3 py-1.5 text-xs font-medium text-brand transition-colors hover:bg-brand/30 disabled:opacity-40"
+                            >
+                              {pagando === m.motoristaId ? 'Registrando…' : 'Registrar PIX feito'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             )}
 
             {((tab === 'drivers' && drivers?.drivers.length === 0) ||

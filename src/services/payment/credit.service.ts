@@ -100,6 +100,22 @@ export class CreditService {
    * está a caminho de volta.
    */
   /**
+   * Quanto a empresa realmente já pagou em comissão de lead.
+   *
+   * Vem do extrato, que é o que de fato saiu da carteira. O painel calculava
+   * isto no navegador como `total de leads × preço por lead`, o que superfatura:
+   * conta lead que nunca foi convertido e por isso nunca custou nada, e ignora
+   * que a comissão sai sobre o valor da venda, não sobre o preço da campanha.
+   */
+  async getSpentOnLeads(company_id: string): Promise<number> {
+    const r = await prisma.companyCreditTx.aggregate({
+      where: { company_id, type: CreditTransactionType.LEAD_PAYOUT },
+      _sum: { amount: true },
+    });
+    return Number(r._sum.amount ?? 0);
+  }
+
+  /**
    * Quanto a empresa consegue de fato retirar.
    *
    * Não é o saldo: só volta o que entrou por pagamento no Mercado Pago e ainda
@@ -319,7 +335,7 @@ export class CreditService {
 
     const lead = await prisma.lead.findUnique({
       where: { id: lead_id },
-      select: { motorista_id: true, company_id: true },
+      select: { motorista_id: true, company_id: true, campaign_id: true },
     });
 
     if (!lead) {
@@ -381,6 +397,18 @@ export class CreditService {
           data: { total_earnings: { increment: comissao } },
         });
 
+        // Contadores da campanha. Ninguém os atualizava, então a taxa de
+        // conversão mostrada à empresa e no painel MASTER ficava presa em 0%
+        // por mais vendas que fossem fechadas. Ficam dentro da transação: uma
+        // conversão que der rollback não pode deixar o contador adiantado.
+        await tx.campaign.update({
+          where: { id: lead.campaign_id },
+          data: {
+            conversions: { increment: 1 },
+            total_investment: { increment: comissao },
+          },
+        });
+
         console.log(
           `[CREDIT] Lead ${lead_id}: -R$ ${comissao} da empresa ${company_id}, +R$ ${comissao} para o motorista ${lead.motorista_id}`,
         );
@@ -402,8 +430,9 @@ export class CreditService {
     pendente: number;
     pago: number;
     total: number;
+    leadsConvertidos: number;
   }> {
-    const [pendente, pago] = await Promise.all([
+    const [pendente, pago, leadsConvertidos] = await Promise.all([
       prisma.driverEarning.aggregate({
         where: { motorista_id, status: DriverEarningStatus.PENDING },
         _sum: { amount: true },
@@ -412,11 +441,17 @@ export class CreditService {
         where: { motorista_id, status: DriverEarningStatus.PAID },
         _sum: { amount: true },
       }),
+      // Cada ganho vem de um lead convertido. A home do motorista contava isso
+      // somando as campanhas aceitas, o que dava zero para quem ganhou por uma
+      // campanha que já saiu do tablet dele.
+      prisma.driverEarning.count({
+        where: { motorista_id, status: { not: DriverEarningStatus.CANCELLED } },
+      }),
     ]);
 
     const p = Number(pendente._sum.amount ?? 0);
     const g = Number(pago._sum.amount ?? 0);
-    return { pendente: p, pago: g, total: p + g };
+    return { pendente: p, pago: g, total: p + g, leadsConvertidos };
   }
 
   /** Extrato do motorista, mais recentes primeiro. */

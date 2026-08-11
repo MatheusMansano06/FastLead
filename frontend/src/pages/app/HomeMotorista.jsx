@@ -44,6 +44,7 @@ export default function HomeMotorista() {
   const [confirmarRemocao, setConfirmarRemocao] = useState(null);
   const [removendo, setRemovendo] = useState(false);
   const [sessions, setSessions] = useState(null);
+  const [carteira, setCarteira] = useState(null);
 
   useEffect(() => {
     if (!isAuthenticated) navigate('/entrar/motorista', { replace: true });
@@ -69,7 +70,12 @@ export default function HomeMotorista() {
     try { setSessions(await apiClient.getDriverSessions()); } catch { setSessions([]); }
   }, []);
 
-  useEffect(() => { loadOps(); loadMine(); loadTablets(); }, [loadOps, loadMine, loadTablets]);
+  const loadCarteira = useCallback(async () => {
+    try { setCarteira(await apiClient.getDriverWallet()); } catch { setCarteira(null); }
+  }, []);
+
+  useEffect(() => { loadOps(); loadMine(); loadTablets(); loadCarteira(); },
+    [loadOps, loadMine, loadTablets, loadCarteira]);
 
   // Jornadas só carregam quando a aba é aberta — é a lista mais pesada e a
   // maioria das visitas ao app não passa por ela.
@@ -96,8 +102,11 @@ export default function HomeMotorista() {
   // Métricas derivadas do que o backend devolve por campanha aceita
   // (leads/scans/earnings são reais) — parceiro novo começa zerado.
   const loading = mine == null;
-  const totalGanhos = mine?.reduce((s, c) => s + Number(c.earnings || 0), 0) ?? 0;
-  const totalLeads = mine?.reduce((s, c) => s + Number(c.leads || 0), 0) ?? 0;
+  // Ganho e leads convertidos vêm da carteira, que é o registro do que de fato
+  // foi creditado. Antes eram somados das campanhas aceitas — quem ganhou por
+  // uma campanha que já saiu do tablet via R$ 0,00 mesmo tendo recebido.
+  const totalGanhos = carteira?.total ?? null;
+  const totalLeads = carteira?.leadsConvertidos ?? null;
   const totalScans = mine?.reduce((s, c) => s + Number(c.scans || 0), 0) ?? 0;
 
   return (
@@ -156,8 +165,8 @@ export default function HomeMotorista() {
             </div>
 
             <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-              <Stat icon="💰" label="Ganhos acumulados" value={loading ? '—' : brl(totalGanhos)} />
-              <Stat icon="🎯" label="Leads convertidos" value={loading ? '—' : totalLeads} />
+              <Stat icon="💰" label="Ganhos acumulados" value={totalGanhos == null ? '—' : brl(totalGanhos)} />
+              <Stat icon="🎯" label="Leads convertidos" value={totalLeads == null ? '—' : totalLeads} />
               <Stat icon="📱" label="Escaneamentos de QR" value={loading ? '—' : totalScans} />
               <Stat icon="🚗" label="Anúncios rodando" value={loading ? '—' : mine.length} />
             </div>
