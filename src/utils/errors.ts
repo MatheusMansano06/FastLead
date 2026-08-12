@@ -1,17 +1,24 @@
 export class AppError extends Error {
   public readonly statusCode: number;
+  /**
+   * Identificador estável da recusa, para a tela reagir sem depender do texto.
+   * A mensagem é escrita para humanos e muda com revisão de copy; comparar
+   * `code` sobrevive a isso.
+   */
+  public readonly code?: string;
 
-  constructor(message: string, statusCode: number = 500) {
+  constructor(message: string, statusCode: number = 500, code?: string) {
     super(message);
     this.statusCode = statusCode;
+    this.code = code;
     this.name = 'AppError';
     Object.setPrototypeOf(this, AppError.prototype);
   }
 }
 
 export class ValidationError extends AppError {
-  constructor(message: string) {
-    super(message, 400);
+  constructor(message: string, code?: string) {
+    super(message, 400, code);
     this.name = 'ValidationError';
     Object.setPrototypeOf(this, ValidationError.prototype);
   }

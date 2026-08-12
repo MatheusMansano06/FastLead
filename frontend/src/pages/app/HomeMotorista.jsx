@@ -49,6 +49,13 @@ export default function HomeMotorista() {
   const [carteira, setCarteira] = useState(null);
   const [toastErro, setToastErro] = useState(false);
   const [mostrarPareamento, setMostrarPareamento] = useState(false);
+  /**
+   * Anúncio que o motorista tentou rodar e esbarrou na falta de tablet.
+   * Guardado para entrar sozinho assim que o pareamento terminar — pedir para
+   * ele procurar o mesmo card de novo, depois de já ter dito que queria aquele,
+   * é o tipo de passo em que se desiste.
+   */
+  const [campanhaPendente, setCampanhaPendente] = useState(null);
   const [avaliacaoCampanha, setAvaliacaoCampanha] = useState(null);
 
   useEffect(() => {
@@ -96,6 +103,18 @@ export default function HomeMotorista() {
       await Promise.all([loadOps(), loadMine()]);
       setTimeout(() => setToast(''), 3500);
     } catch (e) {
+      // Falta de tablet não é erro para toast: é um passo que ficou para trás.
+      // O `temTablet === false` da tela é só um atalho — ele não vale quando a
+      // consulta de aparelhos falhou (fica `null`), quando o clique veio antes
+      // dela responder, ou quando o motorista desvinculou o tablet noutra aba.
+      // Em todos esses casos o aceite chegava ao servidor, voltava recusado e
+      // virava um toast vermelho sem saída. Quem manda é a resposta do backend.
+      if (e?.apiCode === 'TABLET_NOT_PAIRED') {
+        setTemTablet(false);
+        setCampanhaPendente(id);
+        setMostrarPareamento(true);
+        return;
+      }
       setToastErro(true);
       setToast(e?.message || 'Não foi possível aceitar agora.');
       setTimeout(() => setToast(''), 5000);
@@ -131,13 +150,28 @@ export default function HomeMotorista() {
 
       <ModalPareamento
         aberto={mostrarPareamento}
-        aoFechar={() => setMostrarPareamento(false)}
+        aoFechar={() => {
+          setMostrarPareamento(false);
+          setCampanhaPendente(null);
+        }}
         aoParear={() => {
           setMostrarPareamento(false);
+          setTemTablet(true);
+          loadTablets();
+
+          // Consome o pendente: sem zerar, um pareamento futuro feito pelo
+          // aviso do topo (que não tem anúncio associado) aceitaria de novo a
+          // campanha guardada aqui, sem o motorista ter pedido.
+          const pendente = campanhaPendente;
+          setCampanhaPendente(null);
+          if (pendente) {
+            accept(pendente);
+            return; // o accept já dá o retorno na tela
+          }
+
           setToastErro(false);
           setToast('Tablet pareado! Agora é só escolher os anúncios.');
           setTimeout(() => setToast(''), 3500);
-          loadTablets();
         }}
       />
 
@@ -328,6 +362,7 @@ export default function HomeMotorista() {
                         if (o.participated) {
                           setAvaliacaoCampanha(o.id);
                         } else if (temTablet === false) {
+                          setCampanhaPendente(o.id);
                           setMostrarPareamento(true);
                         } else {
                           accept(o.id);

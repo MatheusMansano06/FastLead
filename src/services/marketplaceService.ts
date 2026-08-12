@@ -138,7 +138,8 @@ export class MarketplaceService {
     });
     if (tablets === 0)
       throw new ValidationError(
-        'Você precisa parear o tablet do carro antes de aceitar campanhas. Vá em Perfil e tablet para gerar o código.'
+        'Você precisa parear o tablet do carro antes de aceitar campanhas. Vá em Perfil e tablet para gerar o código.',
+        'TABLET_NOT_PAIRED'
       );
 
     try {

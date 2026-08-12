@@ -33,6 +33,10 @@ export const errorHandler = (
     timestamp: new Date().toISOString(),
   };
 
+  // Só um AppError carrega código: erro interno não tem motivo de negócio para
+  // a tela tratar, e inventar um aqui vazaria detalhe de infraestrutura.
+  if (isAppError && error.code) errorResponse.code = error.code;
+
   if (config.env === 'development') {
     errorResponse.stack = error.stack;
   }

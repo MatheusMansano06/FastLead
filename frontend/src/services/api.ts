@@ -60,10 +60,15 @@ class ApiClient {
         // sabendo o que fazer. Traz a mensagem do servidor para `message`, que
         // é o que as telas leem.
         const dados = error.response?.data as
-          | { message?: string; error?: string }
+          | { message?: string; error?: string; code?: string }
           | undefined;
         const doServidor = dados?.message || dados?.error;
         if (doServidor) error.message = doServidor;
+
+        // Motivo estável da recusa, para a tela reagir com a UI certa em vez de
+        // procurar trecho de frase. Vai em `apiCode` porque `error.code` é do
+        // axios (ERR_NETWORK, ECONNABORTED) e sobrescrever quebraria quem lê.
+        if (dados?.code) (error as AxiosError & { apiCode?: string }).apiCode = dados.code;
 
         return Promise.reject(error);
       }

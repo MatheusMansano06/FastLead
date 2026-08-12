@@ -56,6 +56,8 @@ export interface ErrorResponse {
   message: string;
   statusCode: number;
   timestamp: string;
+  /** Motivo estável da recusa (ex.: TABLET_NOT_PAIRED) — a tela reage a ele. */
+  code?: string;
   /** Só preenchido em desenvolvimento — nunca vaza stack trace em produção. */
   stack?: string;
 }
