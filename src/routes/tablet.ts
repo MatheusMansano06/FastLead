@@ -14,7 +14,7 @@ const router = Router();
 function deviceToken(req: Request): string {
   const token = req.headers['x-device-token'];
   if (!token || typeof token !== 'string') {
-    throw new ValidationError('Tablet não pareado');
+    throw new ValidationError('Tablet não pareado', 'TABLET_NOT_PAIRED');
   }
   return token;
 }

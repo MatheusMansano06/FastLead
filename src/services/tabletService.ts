@@ -348,7 +348,7 @@ export class TabletService {
       },
     });
     if (!device || device.status !== 'ACTIVE' || !device.motorista_id) {
-      throw new ValidationError('Tablet não pareado');
+      throw new ValidationError('Tablet não pareado', 'TABLET_NOT_PAIRED');
     }
     return device;
   }

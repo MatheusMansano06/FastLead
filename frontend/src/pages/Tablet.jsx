@@ -81,7 +81,16 @@ async function tabletFetch(path, { method = 'GET', body, token } = {}) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error || json.message || 'Falha na comunicação');
+  if (!res.ok) {
+    // `message` primeiro: o tratador de erro do servidor manda o NOME da classe
+    // em `error` ("ValidationError") e o texto para humanos em `message`. Lendo
+    // `error` primeiro, a tela anunciava "ValidationError" e — pior — o teste
+    // que devolve o tablet ao pareamento comparava contra esse nome e nunca
+    // batia. O `/pair` responde sem `message`, então o `error` segue de reserva.
+    const erro = new Error(json.message || json.error || 'Falha na comunicação');
+    if (json.code) erro.apiCode = json.code;
+    throw erro;
+  }
   return json.data;
 }
 
@@ -516,12 +525,27 @@ export default function Tablet() {
       localStorage.setItem(PLAYLIST_CACHE_KEY, JSON.stringify(data));
       setError('');
     } catch (e) {
-      // Token revogado (motorista desvinculou o tablet) — volta ao pareamento.
-      if (/não pareado/i.test(e.message)) {
+      // Pareamento que não existe mais: o motorista desvinculou, ou a jornada
+      // foi encerrada (encerrar apaga o aparelho no servidor). Sem descartar o
+      // token aqui, o tablet seguia exibindo para sempre o perfil e os anúncios
+      // do dono anterior, servidos do cache — inclusive depois de ler um QR de
+      // pareamento novo, porque a tela do teclado nunca chegava a aparecer.
+      //
+      // A fila de impressões vai junto: ela foi gravada sob o aparelho antigo e
+      // não tem mais para onde ser enviada. Se sobrevivesse até o próximo
+      // pareamento, seria despejada no motorista novo — creditando a ele
+      // exibições que quem rodou foi outro.
+      //
+      // Só a falta de pareamento limpa. Queda de rede cai no `setError` abaixo
+      // e o cache continua rodando, que é o ponto de ter cache num carro.
+      if (e.apiCode === 'TABLET_NOT_PAIRED' || /não pareado/i.test(e.message)) {
         localStorage.removeItem(TOKEN_KEY);
         localStorage.removeItem(PLAYLIST_CACHE_KEY);
+        localStorage.removeItem(IMPRESSION_QUEUE_KEY);
+        queueRef.current = [];
         setToken(null);
         setPlaylist(null);
+        setError('');
         return;
       }
       setError(e.message);
