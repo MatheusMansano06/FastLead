@@ -530,4 +530,503 @@ export class AdminService {
 
     return row;
   }
+
+  /** Detalhes completos de uma empresa. */
+  static async companyDetail(companyId: string) {
+    const [company, campaigns, creditTxs, leads] = await prisma.$transaction([
+      prisma.anuncianteProfile.findFirst({
+        where: { id: companyId, deleted_at: null },
+        select: {
+          id: true,
+          company_name: true,
+          trade_name: true,
+          document_number: true,
+          industry: true,
+          total_budget: true,
+          total_spent: true,
+          created_at: true,
+          company_id: true,
+          user: { select: { name: true, email: true } },
+        },
+      }),
+      prisma.campaign.findMany({
+        where: { anunciante_id: companyId, deleted_at: null },
+        select: { id: true, title: true, status: true, start_date: true, end_date: true, total_investment: true },
+      }),
+      prisma.companyCreditTx.findMany({
+        where: { company_id: companyId },
+        orderBy: { created_at: 'desc' },
+        take: 100,
+        select: {
+          id: true,
+          type: true,
+          amount: true,
+          balance_after: true,
+          created_at: true,
+          description: true,
+        },
+      }),
+      prisma.lead.findMany({
+        where: { company_id: companyId, deleted_at: null },
+        select: { id: true, status: true, created_at: true },
+      }),
+    ]);
+
+    if (!company) throw new NotFoundError('Empresa não encontrada');
+
+    const converted = leads.filter((l) => l.status === 'CONVERTED').length;
+
+    return {
+      id: company.id,
+      companyName: company.company_name,
+      tradeName: company.trade_name,
+      documentNumber: company.document_number,
+      industry: company.industry,
+      contactName: company.user.name,
+      contactEmail: company.user.email,
+      totalBudget: Number(company.total_budget),
+      totalSpent: Number(company.total_spent),
+      createdAt: company.created_at,
+      metrics: {
+        campaigns: campaigns.length,
+        leads: leads.length,
+        conversions: converted,
+        conversionRate: leads.length > 0 ? Number(((converted / leads.length) * 100).toFixed(2)) : 0,
+      },
+      campaigns: campaigns.map((c) => ({
+        id: c.id,
+        title: c.title,
+        status: c.status,
+        startDate: c.start_date,
+        endDate: c.end_date,
+        investment: Number(c.total_investment),
+      })),
+      creditHistory: creditTxs.map((tx) => ({
+        id: tx.id,
+        type: tx.type,
+        amount: Number(tx.amount),
+        balanceAfter: Number(tx.balance_after),
+        createdAt: tx.created_at,
+        description: tx.description,
+      })),
+    };
+  }
+
+  /** Leads de uma empresa específica. */
+  static async companyLeads(companyId: string, page = 1, limit = 50, filters?: { status?: string }) {
+    const where: any = { company_id: companyId, deleted_at: null };
+    if (filters?.status) where.status = filters.status;
+
+    const [total, leads] = await prisma.$transaction([
+      prisma.lead.count({ where }),
+      prisma.lead.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { created_at: 'desc' },
+        select: {
+          id: true,
+          status: true,
+          contact_name: true,
+          contact_phone: true,
+          contact_email: true,
+          created_at: true,
+          campaign_id: true,
+          motorista: { select: { user: { select: { name: true, email: true } } } },
+          campaign: { select: { title: true } },
+        },
+      }),
+    ]);
+
+    return {
+      total,
+      page,
+      limit,
+      leads: leads.map((l) => ({
+        id: l.id,
+        status: l.status,
+        contactName: l.contact_name,
+        contactPhone: l.contact_phone,
+        contactEmail: l.contact_email,
+        campaign: l.campaign?.title || 'N/A',
+        motorista: l.motorista?.user?.name || 'N/A',
+        createdAt: l.created_at,
+      })),
+    };
+  }
+
+  /** Financial de uma empresa (crédito, gastos, histórico). */
+  static async companyFinancial(companyId: string) {
+    const [company, creditTxs, earnings] = await prisma.$transaction([
+      prisma.anuncianteProfile.findFirst({
+        where: { id: companyId, deleted_at: null },
+        select: { total_budget: true, total_spent: true },
+      }),
+      prisma.companyCreditTx.findMany({
+        where: { company_id: companyId },
+        orderBy: { created_at: 'desc' },
+        select: {
+          id: true,
+          type: true,
+          amount: true,
+          balance_after: true,
+          created_at: true,
+          description: true,
+        },
+      }),
+      prisma.driverEarning.findMany({
+        where: {
+          lead: { campaign: { anunciante_id: companyId } },
+        },
+        select: {
+          id: true,
+          status: true,
+          amount: true,
+          commission_rate: true,
+          created_at: true,
+          lead: { select: { contact_name: true } },
+        },
+      }),
+    ]);
+
+    if (!company) throw new NotFoundError('Empresa não encontrada');
+
+    const paidEarnings = earnings.filter((e) => e.status === 'PAID').reduce((sum, e) => sum + Number(e.amount), 0);
+    const pendingEarnings = earnings
+      .filter((e) => e.status === 'PENDING')
+      .reduce((sum, e) => sum + Number(e.amount), 0);
+
+    const budget = Number(company.total_budget);
+    const spent = Number(company.total_spent);
+    const available = budget - spent;
+
+    return {
+      credit: {
+        budget,
+        spent,
+        available,
+        percentage: budget > 0 ? Number(((spent / budget) * 100).toFixed(2)) : 0,
+      },
+      earnings: {
+        total: Number((paidEarnings + pendingEarnings).toFixed(2)),
+        paid: Number(paidEarnings.toFixed(2)),
+        pending: Number(pendingEarnings.toFixed(2)),
+        count: earnings.length,
+      },
+      transactions: creditTxs.slice(0, 50).map((tx) => ({
+        id: tx.id,
+        type: tx.type,
+        amount: Number(tx.amount),
+        balanceAfter: Number(tx.balance_after),
+        createdAt: tx.created_at,
+        description: tx.description,
+      })),
+    };
+  }
+
+  /** Detalhes de um motorista. */
+  static async driverDetail(motoristaId: string) {
+    const [motorista, earnings, sessions] = await prisma.$transaction([
+      prisma.motoristProfile.findFirst({
+        where: { id: motoristaId, deleted_at: null },
+        select: {
+          id: true,
+          city: true,
+          state: true,
+          region: true,
+          ride_apps: true,
+          ride_categories: true,
+          status: true,
+          rating: true,
+          total_earnings: true,
+          created_at: true,
+          user: { select: { name: true, email: true, avatar_url: true } },
+          _count: {
+            select: {
+              scan_events: true,
+              impression_events: true,
+              leads: true,
+              campaigns: true,
+              devices: true,
+            },
+          },
+        },
+      }),
+      prisma.driverEarning.findMany({
+        where: { motorista_id: motoristaId, deleted_at: null },
+        select: { status: true, amount: true },
+      }),
+      prisma.tabletSession.findMany({
+        where: { motorista_id: motoristaId },
+        select: { started_at: true, ended_at: true },
+      }),
+    ]);
+
+    if (!motorista) throw new NotFoundError('Motorista não encontrado');
+
+    const totalEarned = earnings.reduce((sum, e) => sum + Number(e.amount), 0);
+    const hoursWorked = sessions.reduce((sum, s) => {
+      if (!s.ended_at) return sum;
+      return sum + (s.ended_at.getTime() - s.started_at.getTime()) / (1000 * 60 * 60);
+    }, 0);
+
+    return {
+      id: motorista.id,
+      name: motorista.user.name,
+      email: motorista.user.email,
+      avatarUrl: motorista.user.avatar_url,
+      city: motorista.city,
+      state: motorista.state,
+      region: motorista.region,
+      rideApps: motorista.ride_apps,
+      rideCategories: motorista.ride_categories,
+      status: motorista.status,
+      rating: Number(motorista.rating),
+      totalEarnings: Number(motorista.total_earnings),
+      createdAt: motorista.created_at,
+      metrics: {
+        impressions: motorista._count.impression_events,
+        scans: motorista._count.scan_events,
+        leads: motorista._count.leads,
+        campaigns: motorista._count.campaigns,
+        devices: motorista._count.devices,
+        hoursWorked: Number(hoursWorked.toFixed(2)),
+        sessionsCount: sessions.length,
+      },
+      earnings: {
+        total: Number(totalEarned.toFixed(2)),
+        count: earnings.length,
+      },
+    };
+  }
+
+  /** Earnings de um motorista (por período/status). */
+  static async driverEarnings(motoristaId: string, page = 1, limit = 50, filters?: { status?: string }) {
+    const where: any = { motorista_id: motoristaId, deleted_at: null };
+    if (filters?.status) where.status = filters.status;
+
+    const [total, earnings] = await prisma.$transaction([
+      prisma.driverEarning.count({ where }),
+      prisma.driverEarning.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { created_at: 'desc' },
+        select: {
+          id: true,
+          status: true,
+          amount: true,
+          commission_rate: true,
+          created_at: true,
+          lead: { select: { contact_name: true, campaign_id: true, campaign: { select: { title: true } } } },
+        },
+      }),
+    ]);
+
+    return {
+      total,
+      page,
+      limit,
+      earnings: earnings.map((e) => ({
+        id: e.id,
+        status: e.status,
+        amount: Number(e.amount),
+        commissionRate: Number(e.commission_rate),
+        campaign: e.lead?.campaign?.title || 'N/A',
+        contact: e.lead?.contact_name || 'N/A',
+        createdAt: e.created_at,
+      })),
+    };
+  }
+
+  /** Sessions de trabalho de um motorista. */
+  static async driverSessions(motoristaId: string, page = 1, limit = 50) {
+    const [total, sessions] = await prisma.$transaction([
+      prisma.tabletSession.count({ where: { motorista_id: motoristaId } }),
+      prisma.tabletSession.findMany({
+        where: { motorista_id: motoristaId },
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { started_at: 'desc' },
+        select: {
+          id: true,
+          started_at: true,
+          ended_at: true,
+          device: { select: { label: true } },
+          scans_count: true,
+        },
+      }),
+    ]);
+
+    return {
+      total,
+      page,
+      limit,
+      sessions: sessions.map((s) => {
+        const duration = s.ended_at
+          ? (s.ended_at.getTime() - s.started_at.getTime()) / (1000 * 60)
+          : null;
+        return {
+          id: s.id,
+          deviceName: s.device?.label || 'N/A',
+          startTime: s.started_at,
+          endTime: s.ended_at,
+          durationMinutes: duration ? Number(duration.toFixed(2)) : null,
+          scans: s.scans_count,
+        };
+      }),
+    };
+  }
+
+  /** Stats agregadas de um motorista (horas, clientes, média). */
+  static async driverStats(motoristaId: string) {
+    const [motorista, sessions, leads, earnings, scans] = await prisma.$transaction([
+      prisma.motoristProfile.findFirst({
+        where: { id: motoristaId, deleted_at: null },
+        select: { total_earnings: true, rating: true },
+      }),
+      prisma.tabletSession.findMany({
+        where: { motorista_id: motoristaId },
+        select: { started_at: true, ended_at: true },
+      }),
+      prisma.lead.findMany({
+        where: { motorista_id: motoristaId, deleted_at: null },
+        select: { status: true },
+      }),
+      prisma.driverEarning.findMany({
+        where: { motorista_id: motoristaId, deleted_at: null },
+        select: { amount: true, status: true },
+      }),
+      prisma.scanEvent.findMany({
+        where: { motorista_id: motoristaId },
+        select: { is_unique: true },
+      }),
+    ]);
+
+    if (!motorista) throw new NotFoundError('Motorista não encontrado');
+
+    const hoursWorked = sessions.reduce((sum, s) => {
+      if (!s.ended_at) return sum;
+      return sum + (s.ended_at.getTime() - s.started_at.getTime()) / (1000 * 60 * 60);
+    }, 0);
+
+    const converted = leads.filter((l) => l.status === 'CONVERTED').length;
+    const pendingEarnings = earnings
+      .filter((e) => e.status === 'PENDING')
+      .reduce((sum, e) => sum + Number(e.amount), 0);
+    const uniqueScans = scans.filter((s) => s.is_unique).length;
+
+    return {
+      totalEarnings: Number(motorista.total_earnings),
+      pendingEarnings: Number(pendingEarnings.toFixed(2)),
+      rating: Number(motorista.rating),
+      stats: {
+        hoursWorked: Number(hoursWorked.toFixed(2)),
+        sessionsCount: sessions.length,
+        leadsGenerated: leads.length,
+        leadsConverted: converted,
+        conversionRate: leads.length > 0 ? Number(((converted / leads.length) * 100).toFixed(2)) : 0,
+        scans: scans.length,
+        uniqueScans,
+        avgEarningPerLead: leads.length > 0 ? Number((Number(motorista.total_earnings) / leads.length).toFixed(2)) : 0,
+      },
+    };
+  }
+
+  /** Histórico de pagamentos (payouts) de um motorista. */
+  static async driverPayouts(motoristaId: string, page = 1, limit = 50) {
+    const [total, payouts] = await prisma.$transaction([
+      prisma.payment.count({ where: { motorista_id: motoristaId } }),
+      prisma.payment.findMany({
+        where: { motorista_id: motoristaId },
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { created_at: 'desc' },
+        select: {
+          id: true,
+          amount: true,
+          status: true,
+          payout_method: true,
+          reference_id: true,
+          created_at: true,
+          updated_at: true,
+        },
+      }),
+    ]);
+
+    return {
+      total,
+      page,
+      limit,
+      payouts: payouts.map((p) => ({
+        id: p.id,
+        amount: Number(p.amount),
+        status: p.status,
+        method: p.payout_method,
+        reference: p.reference_id,
+        createdAt: p.created_at,
+        updatedAt: p.updated_at,
+      })),
+    };
+  }
+
+  /** Suspender um motorista. */
+  static async suspendDriver(adminUserId: string, motoristaId: string, reason: string) {
+    const motorista = await prisma.motoristProfile.findFirst({
+      where: { id: motoristaId, deleted_at: null },
+      select: { id: true, status: true, company_id: true },
+    });
+
+    if (!motorista) throw new NotFoundError('Motorista não encontrado');
+    if (motorista.status === 'SUSPENSO') return { status: 'already_suspended' };
+
+    await prisma.motoristProfile.update({
+      where: { id: motoristaId },
+      data: { status: 'SUSPENSO' },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        resource_type: 'MotoristaProfile',
+        resource_id: motoristaId,
+        action: 'UPDATE',
+        old_values: { status: motorista.status },
+        new_values: { status: 'SUSPENSO', reason },
+        user_id: adminUserId,
+        company_id: motorista.company_id,
+      },
+    });
+
+    return { status: 'suspended' };
+  }
+
+  /** Ativar um motorista. */
+  static async activateDriver(adminUserId: string, motoristaId: string) {
+    const motorista = await prisma.motoristProfile.findFirst({
+      where: { id: motoristaId, deleted_at: null },
+      select: { id: true, status: true, company_id: true },
+    });
+
+    if (!motorista) throw new NotFoundError('Motorista não encontrado');
+    if (motorista.status === 'ATIVO') return { status: 'already_active' };
+
+    await prisma.motoristProfile.update({
+      where: { id: motoristaId },
+      data: { status: 'ATIVO' },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        resource_type: 'MotoristaProfile',
+        resource_id: motoristaId,
+        action: 'UPDATE',
+        old_values: { status: motorista.status },
+        new_values: { status: 'ATIVO' },
+        user_id: adminUserId,
+        company_id: motorista.company_id,
+      },
+    });
+
+    return { status: 'activated' };
+  }
 }

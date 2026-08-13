@@ -208,4 +208,99 @@ router.post(
   })
 );
 
+// ============= COMPANY DETAIL ROUTES =============
+
+/** GET /admin/companies/:id — detalhes completos de uma empresa */
+router.get(
+  '/companies/:id',
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json({ data: await AdminService.companyDetail(String(req.params.id)) });
+  })
+);
+
+/** GET /admin/companies/:id/leads — leads de uma empresa */
+router.get(
+  '/companies/:id/leads',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { page, limit } = pageOf(req);
+    const filters = { status: req.query.status ? String(req.query.status) : undefined };
+    res.json({ data: await AdminService.companyLeads(String(req.params.id), page, limit, filters) });
+  })
+);
+
+/** GET /admin/companies/:id/financial — financeiro (crédito, gastos, histórico) */
+router.get(
+  '/companies/:id/financial',
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json({ data: await AdminService.companyFinancial(String(req.params.id)) });
+  })
+);
+
+// ============= DRIVER DETAIL ROUTES =============
+
+/** GET /admin/drivers/:id — detalhes completos de um motorista */
+router.get(
+  '/drivers/:id',
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json({ data: await AdminService.driverDetail(String(req.params.id)) });
+  })
+);
+
+/** GET /admin/drivers/:id/earnings — ganhos de um motorista */
+router.get(
+  '/drivers/:id/earnings',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { page, limit } = pageOf(req);
+    const filters = { status: req.query.status ? String(req.query.status) : undefined };
+    res.json({ data: await AdminService.driverEarnings(String(req.params.id), page, limit, filters) });
+  })
+);
+
+/** GET /admin/drivers/:id/sessions — sessões de trabalho */
+router.get(
+  '/drivers/:id/sessions',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { page, limit } = pageOf(req);
+    res.json({ data: await AdminService.driverSessions(String(req.params.id), page, limit) });
+  })
+);
+
+/** GET /admin/drivers/:id/stats — stats agregadas (horas, clientes, média) */
+router.get(
+  '/drivers/:id/stats',
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json({ data: await AdminService.driverStats(String(req.params.id)) });
+  })
+);
+
+/** GET /admin/drivers/:id/payouts — histórico de pagamentos */
+router.get(
+  '/drivers/:id/payouts',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { page, limit } = pageOf(req);
+    res.json({ data: await AdminService.driverPayouts(String(req.params.id), page, limit) });
+  })
+);
+
+/** POST /admin/drivers/:id/suspend — suspender motorista */
+router.post(
+  '/drivers/:id/suspend',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { reason } = req.body || {};
+    if (!reason) {
+      res.status(400).json({ error: 'reason é obrigatório' });
+      return;
+    }
+    res.json({ data: await AdminService.suspendDriver(req.user!.id, String(req.params.id), reason) });
+  })
+);
+
+/** POST /admin/drivers/:id/activate — ativar motorista */
+router.post(
+  '/drivers/:id/activate',
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json({ data: await AdminService.activateDriver(req.user!.id, String(req.params.id)) });
+  })
+);
+
 export default router;

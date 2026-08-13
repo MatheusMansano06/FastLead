@@ -32,6 +32,13 @@ const PerfilMotorista = lazy(() => import('./pages/app/PerfilMotorista'));
 // MASTER (visão global de todas as empresas e motoristas)
 const Master = lazy(() => import('./pages/Master'));
 
+// Admin Dashboard
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
+const AdminCompanies = lazy(() => import('./pages/admin/AdminCompanies'));
+const AdminCompanyDetail = lazy(() => import('./pages/admin/AdminCompanyDetail'));
+const AdminDrivers = lazy(() => import('./pages/admin/AdminDrivers'));
+const AdminDriverDetail = lazy(() => import('./pages/admin/AdminDriverDetail'));
+
 // Páginas antigas do anunciante
 const CreateCampaign = lazy(() => import('./pages/CreateCampaign'));
 const Campaigns = lazy(() => import('./pages/Campaigns'));
@@ -96,6 +103,13 @@ const App = () => {
 
         {/* Painel MASTER */}
         <Route path="/master" element={<MasterRoute><Master /></MasterRoute>} />
+
+        {/* Admin Dashboard */}
+        <Route path="/admin" element={<MasterRoute><AdminDashboard /></MasterRoute>} />
+        <Route path="/admin/companies" element={<MasterRoute><AdminCompanies /></MasterRoute>} />
+        <Route path="/admin/companies/:id" element={<MasterRoute><AdminCompanyDetail /></MasterRoute>} />
+        <Route path="/admin/drivers" element={<MasterRoute><AdminDrivers /></MasterRoute>} />
+        <Route path="/admin/drivers/:id" element={<MasterRoute><AdminDriverDetail /></MasterRoute>} />
 
         {/* Advertiser sub-pages */}
         <Route path="/create-campaign" element={<ProtectedRoute><CreateCampaign /></ProtectedRoute>} />
