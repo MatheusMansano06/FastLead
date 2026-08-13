@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AppHeader from '../../components/app/AppHeader';
+import AcessoTablet from '../../components/app/AcessoTablet';
 import { apiClient } from '../../services/api';
 
 /**
@@ -407,8 +408,13 @@ export default function PerfilMotorista() {
 
         <Card
           title="Tablet do carro"
-          subtitle="Abra /tablet no aparelho do carro e digite o código. Sua senha não fica salva no tablet."
+          subtitle="Abra o endereço abaixo no aparelho do carro e digite o código. Sua senha não fica salva no tablet."
         >
+          {/* Endereço antes do código, e sempre visível: encerrar a jornada
+              desfaz o pareamento, então no dia seguinte o motorista precisa
+              voltar ao site — e pode ter fechado a aba no meio. */}
+          <AcessoTablet url={pairing?.tabletUrl} qrCode={pairing?.tabletUrlQrCode} className="mb-4" />
+
           {pairing ? (
             <div className="flex flex-col items-center gap-2 py-3">
               <div

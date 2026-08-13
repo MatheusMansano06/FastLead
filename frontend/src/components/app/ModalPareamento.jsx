@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiClient } from '../../services/api';
+import AcessoTablet from './AcessoTablet';
 
 const ACCENT = '#0A9D6C';
 
@@ -75,7 +76,8 @@ export default function ModalPareamento({ aberto, aoFechar, aoParear }) {
   const PASSOS = [
     {
       titulo: 'Abra o site no tablet do carro',
-      texto: 'Aponte a câmera do tablet para o QR abaixo. Ele abre a tela de pareamento direto.',
+      texto:
+        'Aponte a câmera do tablet para o QR, ou digite o endereço direto no navegador dele. Os dois levam à mesma tela.',
     },
     {
       titulo: 'Digite o código na tela do tablet',
@@ -138,20 +140,11 @@ export default function ModalPareamento({ aberto, aoFechar, aoParear }) {
 
                   {i === 0 && (
                     <div className="mt-3">
-                      {dados ? (
-                        <div className="inline-flex flex-col items-center rounded-2xl border border-ink/[0.07] bg-white p-3">
-                          <img
-                            src={dados.tabletUrlQrCode}
-                            alt="QR para abrir o pareamento no tablet"
-                            className="h-40 w-40"
-                          />
-                          <p className="mt-2 max-w-[10rem] break-all text-center text-[11px] text-ink/40">
-                            {dados.tabletUrl}
-                          </p>
-                        </div>
-                      ) : (
-                        !erro && <div className="h-40 w-40 animate-pulse rounded-2xl bg-black/5" />
-                      )}
+                      {/* O endereço aparece mesmo enquanto o código carrega: quem
+                          voltou aqui porque perdeu a aba precisa dele, não do
+                          QR. Antes ele existia em 11px cinza sob o QR, largura
+                          de 10rem e quebrado no meio — ilegível para digitar. */}
+                      <AcessoTablet url={dados?.tabletUrl} qrCode={dados?.tabletUrlQrCode} />
                     </div>
                   )}
 
