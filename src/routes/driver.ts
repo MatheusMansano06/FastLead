@@ -283,9 +283,7 @@ router.get(
       data: {
         reviews,
         stats,
-        myReview: myReview
-          ? { rating: myReview.rating, comment: myReview.comment }
-          : null,
+        myReview: myReview ? { rating: myReview.rating, comment: myReview.comment } : null,
       },
     });
   })

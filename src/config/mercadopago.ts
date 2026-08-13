@@ -43,7 +43,7 @@ if (process.env.NODE_ENV === 'production') {
   if (!MERCADOPAGO_CONFIG.notificationUrl) {
     console.warn(
       '⚠️  APP_URL ausente ou não-https — o webhook do Mercado Pago não será chamado; ' +
-        'a confirmação de pagamento fica dependendo de /billing/verify',
+        'a confirmação de pagamento fica dependendo de /billing/verify'
     );
   }
 }

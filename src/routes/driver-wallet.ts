@@ -32,7 +32,7 @@ router.get(
 
     const saldo = await creditService.getDriverBalance(perfil.id);
     res.json(saldo);
-  }),
+  })
 );
 
 /**
@@ -54,7 +54,7 @@ router.get(
 
     const earnings = await creditService.getDriverEarnings(perfil.id, limit, offset);
     res.json({ earnings });
-  }),
+  })
 );
 
 export default router;

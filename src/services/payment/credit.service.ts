@@ -43,7 +43,7 @@ export class CreditService {
     company_id: string,
     amount: number,
     mercadopago_id: string,
-    description?: string,
+    description?: string
   ): Promise<any> {
     const decimal_amount = new Decimal(amount);
 
@@ -75,8 +75,7 @@ export class CreditService {
           mercadopago_id,
           balance_after: updated.credit_balance,
           description:
-            description ||
-            `Depósito via Mercado Pago — ${new Date().toLocaleDateString('pt-BR')}`,
+            description || `Depósito via Mercado Pago — ${new Date().toLocaleDateString('pt-BR')}`,
         },
       });
 
@@ -166,7 +165,7 @@ export class CreditService {
 
   async refundToCompany(
     company_id: string,
-    amount: number,
+    amount: number
   ): Promise<{ estornado: number; saldo: number; falhas: number }> {
     const pedido = new Decimal(amount);
     const { disponiveis } = await this.planoDeEstorno(company_id);
@@ -182,7 +181,7 @@ export class CreditService {
     if (pedido.gt(teto)) {
       throw new Error(
         `Disponível para retirada: R$ ${teto.toFixed(2)}. ` +
-          `Só volta o que entrou por pagamento e ainda não foi estornado.`,
+          `Só volta o que entrou por pagamento e ainda não foi estornado.`
       );
     }
 
@@ -216,7 +215,7 @@ export class CreditService {
         const r = await mercadoPagoService.estornarPagamento(
           item.payment_id,
           item.valor.toNumber(),
-          `refund_${company_id}_${item.payment_id}_${item.valor.toFixed(2)}`,
+          `refund_${company_id}_${item.payment_id}_${item.valor.toFixed(2)}`
         );
 
         const saldoAtual = await prisma.company.findUniqueOrThrow({
@@ -242,7 +241,7 @@ export class CreditService {
       } catch (e) {
         falhas++;
         console.error(
-          `[CREDIT] Estorno falhou para ${item.payment_id}: ${(e as Error).message} — devolvendo a reserva`,
+          `[CREDIT] Estorno falhou para ${item.payment_id}: ${(e as Error).message} — devolvendo a reserva`
         );
         // Devolve só o que não saiu; o resto permanece reservado corretamente.
         await prisma.company.update({
@@ -275,7 +274,7 @@ export class CreditService {
   async debitForCampaign(
     company_id: string,
     campaign_id: string,
-    amount: number,
+    amount: number
   ): Promise<boolean> {
     const decimal_amount = new Decimal(amount);
 
@@ -283,7 +282,7 @@ export class CreditService {
     const balance = await this.getBalance(company_id);
     if (balance < amount) {
       console.log(
-        `[CREDIT] Saldo insuficiente: ${company_id} tem R$ ${balance} mas precisa de R$ ${amount}`,
+        `[CREDIT] Saldo insuficiente: ${company_id} tem R$ ${balance} mas precisa de R$ ${amount}`
       );
       return false;
     }
@@ -329,7 +328,7 @@ export class CreditService {
   async debitLeadConversion(
     company_id: string,
     lead_id: string,
-    total_amount: number, // Valor total do lead (negociado empresa-motorista)
+    total_amount: number // Valor total do lead (negociado empresa-motorista)
   ): Promise<boolean> {
     const comissao = new Decimal(total_amount).mul(COMMISSION_RATE);
 
@@ -358,7 +357,7 @@ export class CreditService {
 
         if (debitado.count === 0) {
           console.log(
-            `[CREDIT] Saldo insuficiente para converter lead ${lead_id} (precisa de R$ ${comissao})`,
+            `[CREDIT] Saldo insuficiente para converter lead ${lead_id} (precisa de R$ ${comissao})`
           );
           return false;
         }
@@ -410,7 +409,7 @@ export class CreditService {
         });
 
         console.log(
-          `[CREDIT] Lead ${lead_id}: -R$ ${comissao} da empresa ${company_id}, +R$ ${comissao} para o motorista ${lead.motorista_id}`,
+          `[CREDIT] Lead ${lead_id}: -R$ ${comissao} da empresa ${company_id}, +R$ ${comissao} para o motorista ${lead.motorista_id}`
         );
         return true;
       });
@@ -483,7 +482,7 @@ export class CreditService {
   async markEarningsPaid(
     earning_ids: string[],
     payout_ref: string,
-    paid_by: string,
+    paid_by: string
   ): Promise<{ pagos: number; valor: number }> {
     const alvos = await prisma.driverEarning.findMany({
       where: { id: { in: earning_ids }, status: DriverEarningStatus.PENDING },
@@ -503,7 +502,9 @@ export class CreditService {
     });
 
     const valor = alvos.reduce((s, a) => s + Number(a.amount), 0);
-    console.log(`[CREDIT] ${alvos.length} ganhos marcados como pagos (R$ ${valor}) ref=${payout_ref}`);
+    console.log(
+      `[CREDIT] ${alvos.length} ganhos marcados como pagos (R$ ${valor}) ref=${payout_ref}`
+    );
     return { pagos: alvos.length, valor };
   }
 
@@ -515,7 +516,7 @@ export class CreditService {
     amount: number,
     lead_id?: string,
     campaign_id?: string,
-    reason?: string,
+    reason?: string
   ): Promise<void> {
     const decimal_amount = new Decimal(amount);
 
@@ -545,11 +546,7 @@ export class CreditService {
   /**
    * Retorna histórico de transações da empresa (paginado).
    */
-  async getHistory(
-    company_id: string,
-    limit = 50,
-    offset = 0,
-  ): Promise<any[]> {
+  async getHistory(company_id: string, limit = 50, offset = 0): Promise<any[]> {
     return prisma.companyCreditTx.findMany({
       where: { company_id },
       orderBy: { created_at: 'desc' },
@@ -565,11 +562,7 @@ export class CreditService {
   /**
    * Ajusta saldo manualmente (admin only).
    */
-  async adjustBalance(
-    company_id: string,
-    amount: number,
-    reason: string,
-  ): Promise<void> {
+  async adjustBalance(company_id: string, amount: number, reason: string): Promise<void> {
     const decimal_amount = new Decimal(amount);
 
     const updated = await prisma.company.update({

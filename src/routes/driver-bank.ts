@@ -74,7 +74,7 @@ router.post(
 
     console.log(`[BANK] Conta do motorista ${perfil.id} salva (${conta.status})`);
     res.json(conta);
-  }),
+  })
 );
 
 /**
@@ -115,7 +115,7 @@ router.get(
       cpf: mascarar(conta.cpf, 3),
       verified_at: conta.verified_at,
     });
-  }),
+  })
 );
 
 export default router;

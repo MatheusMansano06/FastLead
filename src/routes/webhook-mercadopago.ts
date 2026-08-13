@@ -79,7 +79,7 @@ router.post(
     } catch (erro) {
       console.error(`[WEBHOOK] Falha ao processar pagamento ${dataId}:`, erro);
     }
-  }),
+  })
 );
 
 export default router;

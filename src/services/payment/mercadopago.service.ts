@@ -99,7 +99,7 @@ export class MercadoPagoService {
 
       const ultima = tentativa === 3;
       console.warn(
-        `[MP] PIX falhou com ${resposta.status} (tentativa ${tentativa}/3)${ultima ? '' : ' — repetindo'}`,
+        `[MP] PIX falhou com ${resposta.status} (tentativa ${tentativa}/3)${ultima ? '' : ' — repetindo'}`
       );
       if (!ultima) await new Promise((r) => setTimeout(r, 400 * tentativa));
     }
@@ -111,8 +111,7 @@ export class MercadoPagoService {
     }
 
     const poi = corpo.point_of_interaction as
-      | { transaction_data?: { qr_code?: string; qr_code_base64?: string } }
-      | undefined;
+      { transaction_data?: { qr_code?: string; qr_code_base64?: string } } | undefined;
     const dados = poi?.transaction_data;
 
     console.log(`[MP] PIX criado: id=${corpo.id} status=${corpo.status}`);
@@ -140,7 +139,7 @@ export class MercadoPagoService {
   async estornarPagamento(
     payment_id: string,
     amount: number,
-    idempotency_key: string,
+    idempotency_key: string
   ): Promise<{ id: string; amount: number; status: string }> {
     const resposta = await fetch(`${API}/v1/payments/${payment_id}/refunds`, {
       method: 'POST',

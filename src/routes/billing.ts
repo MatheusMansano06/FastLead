@@ -46,7 +46,7 @@ router.post(
       qr_code_base64: cobranca.qr_code_base64,
       expira_em: cobranca.expira_em,
     });
-  }),
+  })
 );
 
 /** GET /billing/balance — saldo atual da empresa. */
@@ -55,7 +55,7 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const balance = await creditService.getBalance(req.user!.companyId!);
     res.json({ balance });
-  }),
+  })
 );
 
 /**
@@ -83,7 +83,7 @@ router.post(
 
     if (!pagamento.external_reference?.startsWith(refDaEmpresa(company_id))) {
       console.warn(
-        `[BILLING] Empresa ${company_id} tentou verificar pagamento alheio ${payment_id}`,
+        `[BILLING] Empresa ${company_id} tentou verificar pagamento alheio ${payment_id}`
       );
       res.status(403).json({ error: 'Pagamento não pertence a esta empresa' });
       return;
@@ -102,7 +102,7 @@ router.post(
     const balance = await creditService.getBalance(company_id);
 
     res.json({ status: 'approved', amount: pagamento.amount, balance });
-  }),
+  })
 );
 
 /** GET /billing/history — extrato da empresa. */
@@ -113,7 +113,7 @@ router.get(
     const offset = parseInt(req.query.offset as string) || 0;
     const transactions = await creditService.getHistory(req.user!.companyId!, limit, offset);
     res.json({ transactions });
-  }),
+  })
 );
 
 /**
@@ -132,7 +132,7 @@ router.get(
       creditService.getSpentOnLeads(company_id),
     ]);
     res.json({ balance, refundable, spentOnLeads });
-  }),
+  })
 );
 
 /**
@@ -147,7 +147,7 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const refundable = await creditService.refundableAmount(req.user!.companyId!);
     res.json({ refundable });
-  }),
+  })
 );
 
 /**
@@ -188,7 +188,7 @@ router.post(
         msg.includes('Disponível para retirada');
       res.status(doUsuario ? 400 : 502).json({ error: msg });
     }
-  }),
+  })
 );
 
 export default router;
