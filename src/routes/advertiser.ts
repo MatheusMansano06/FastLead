@@ -94,6 +94,48 @@ router.get(
 );
 
 /**
+ * POST /advertiser/campaigns/simulate
+ *
+ * Quanto custaria, sem criar nada. É o simulador dentro do painel: a empresa
+ * mexe em carros, minutos por dia e datas, e vê o preço mudar antes de se
+ * comprometer.
+ *
+ * Usa a mesma função que cobra de verdade. Um simulador com fórmula própria
+ * acabaria divergindo do preço cobrado, e a empresa descobriria na fatura.
+ */
+router.post(
+  '/campaigns/simulate',
+  verifyJWT,
+  authorize(UserType.ADVERTISER),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { numVehicles, dailyMinutes, durationDays, startDate, endDate, targetCities } =
+      req.body || {};
+
+    const veiculos = Number(numVehicles);
+    const minutos = Number(dailyMinutes);
+    if (!Number.isFinite(veiculos) || veiculos < 1) {
+      res.status(400).json({ error: 'Informe quantos veículos a campanha quer ocupar' });
+      return;
+    }
+    if (!Number.isFinite(minutos) || minutos < 1) {
+      res.status(400).json({ error: 'Informe quantos minutos de tela por dia' });
+      return;
+    }
+
+    const data = AnuncianteService.simulate({
+      numVehicles: veiculos,
+      dailyMinutes: minutos,
+      durationDays: durationDays ? Number(durationDays) : undefined,
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+      targetCities: Array.isArray(targetCities) ? targetCities.map(String) : [],
+    });
+
+    res.json({ message: 'Simulação do plano', data });
+  })
+);
+
+/**
  * POST /advertiser/campaigns
  * Create new campaign
  */
@@ -122,9 +164,15 @@ router.post(
       targetCities,
       targetRideApps,
       targetCategories,
+      dailyMinutes,
+      startDate,
+      endDate,
     } = req.body;
 
-    if (!title || !numVehicles || !durationDays || pricePerLead === undefined) {
+    // `durationDays` deixa de ser obrigatório quando vem período do calendário:
+    // as datas já dizem quantos dias são.
+    const temPeriodo = Boolean(startDate && endDate);
+    if (!title || !numVehicles || (!durationDays && !temPeriodo) || pricePerLead === undefined) {
       res.status(400).json({ error: 'Missing required fields' });
       return;
     }
@@ -137,8 +185,11 @@ router.post(
       description,
       imageUrl,
       numVehicles: Number(numVehicles),
-      durationDays: Number(durationDays),
+      durationDays: Number(durationDays) || 30,
       pricePerLead: Number(pricePerLead),
+      dailyMinutes: dailyMinutes === undefined ? undefined : Number(dailyMinutes),
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
       publish,
       destinationUrl,
       ctaText,

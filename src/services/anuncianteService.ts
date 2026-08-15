@@ -1,8 +1,10 @@
 import { randomUUID } from 'crypto';
 import prisma from '../lib/prisma';
 import { QrPosition, Region, RideApp, RideCategory } from '@prisma/client';
-import { NotFoundError } from '../utils/errors';
+import { NotFoundError, ValidationError } from '../utils/errors';
 import { ufsForRegions } from '../utils/segmentation';
+import { DAILY_MINUTES_CAP, InventoryService } from './inventoryService';
+import { daysBetween, quotePlan } from './pricingService';
 import { QRService } from './qrService';
 import logger from '../config/logger';
 
@@ -60,6 +62,18 @@ export class AnuncianteService {
       durationDays: number;
       pricePerLead: number;
       publish?: boolean;
+      /**
+       * Minutos de tela por dia em cada carro. É o que a empresa está
+       * comprando, e o que ocupa a agenda do motorista.
+       */
+      dailyMinutes?: number;
+      /**
+       * Período escolhido no calendário. Quando vem, manda em `durationDays` —
+       * quem escolheu 12/03 a 25/04 quer exatamente isso, não "45 dias a partir
+       * de hoje".
+       */
+      startDate?: Date;
+      endDate?: Date;
       destinationUrl?: string;
       ctaText?: string;
       // Montagem do anúncio na tela do tablet
@@ -85,12 +99,46 @@ export class AnuncianteService {
       throw new NotFoundError('Anunciante profile not found');
     }
 
-    const startDate = new Date();
-    const endDate = new Date();
-    endDate.setDate(endDate.getDate() + data.durationDays);
+    // Calendário manda quando vem; senão, conta a partir de hoje.
+    const startDate = data.startDate ? new Date(data.startDate) : new Date();
+    const endDate = data.endDate
+      ? new Date(data.endDate)
+      : (() => {
+          const d = new Date(startDate);
+          d.setDate(d.getDate() + data.durationDays);
+          return d;
+        })();
 
-    // Calculate total investment
-    const totalInvestment = data.numVehicles * data.durationDays * data.pricePerLead;
+    if (endDate < startDate) {
+      throw new ValidationError('A data final não pode ser anterior à inicial');
+    }
+
+    const dailyMinutes = Math.floor(data.dailyMinutes ?? 60);
+    if (dailyMinutes < 1) {
+      throw new ValidationError('Informe quanto tempo de tela por dia a campanha ocupa');
+    }
+    // Nenhuma campanha sozinha pode passar do dia inteiro do motorista: ela
+    // ficaria impossível de aceitar, aparecendo no marketplace para ser sempre
+    // recusada pelo teto.
+    if (dailyMinutes > DAILY_MINUTES_CAP) {
+      throw new ValidationError(
+        `O máximo por campanha é ${InventoryService.formatMinutes(DAILY_MINUTES_CAP)} por dia, que é o total que um motorista consegue exibir.`,
+        'DAILY_MINUTES_ABOVE_CAP'
+      );
+    }
+
+    // Preço pela mesma tabela do simulador: quem viu uma estimativa antes de
+    // entrar não pode encontrar outro número na hora de contratar. Cresce com
+    // carros, horas por dia e dias de campanha — as três coisas que consomem
+    // inventário.
+    const days = daysBetween(startDate, endDate);
+    const quote = quotePlan({
+      vehicles: data.numVehicles,
+      dailyMinutes,
+      days,
+      cities: data.targetCities ?? [],
+    });
+    const totalInvestment = quote.total;
 
     // Estados alvo = os informados + os que as regiões escolhidas contêm.
     // Guardar já expandido evita ter que resolver região em toda consulta.
@@ -125,6 +173,7 @@ export class AnuncianteService {
         start_date: startDate,
         end_date: endDate,
         target_vehicles: data.numVehicles,
+        daily_minutes: dailyMinutes,
         price_per_lead: data.pricePerLead,
         total_investment: totalInvestment,
         target_regions: data.targetRegions || [],
@@ -154,8 +203,54 @@ export class AnuncianteService {
       startDate: campaign.start_date,
       endDate: campaign.end_date,
       targetVehicles: campaign.target_vehicles,
+      dailyMinutes: campaign.daily_minutes,
+      dailyLabel: InventoryService.formatMinutes(campaign.daily_minutes),
       pricePerLead: campaign.price_per_lead?.toString(),
       totalInvestment: campaign.total_investment.toString(),
+      /** Como o preço foi formado — a empresa vê a conta, não só o resultado. */
+      quote,
+    };
+  }
+
+  /**
+   * Quanto custaria, sem criar nada.
+   *
+   * Alimenta o simulador dentro do painel: a empresa mexe nos controles e vê o
+   * preço mudar antes de se comprometer. Mesma função que cobra de verdade, e
+   * não uma estimativa paralela que poderia divergir.
+   */
+  static simulate(input: {
+    numVehicles: number;
+    dailyMinutes: number;
+    startDate?: Date;
+    endDate?: Date;
+    durationDays?: number;
+    targetCities?: string[];
+  }) {
+    const start = input.startDate ? new Date(input.startDate) : new Date();
+    const end = input.endDate
+      ? new Date(input.endDate)
+      : (() => {
+          const d = new Date(start);
+          d.setDate(d.getDate() + (input.durationDays ?? 30));
+          return d;
+        })();
+
+    const days = daysBetween(start, end);
+    const quote = quotePlan({
+      vehicles: input.numVehicles,
+      dailyMinutes: input.dailyMinutes,
+      days,
+      cities: input.targetCities ?? [],
+    });
+
+    return {
+      ...quote,
+      startDate: start,
+      endDate: end,
+      dailyLabel: InventoryService.formatMinutes(quote.dailyMinutes),
+      /** Quantas campanhas deste tamanho cabem no dia de um motorista. */
+      slotsPerDriver: Math.floor(DAILY_MINUTES_CAP / quote.dailyMinutes),
     };
   }
 
