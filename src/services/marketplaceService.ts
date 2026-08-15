@@ -2,6 +2,7 @@ import prisma from '../lib/prisma';
 import { RideApp, RideCategory } from '@prisma/client';
 import { NotFoundError, ConflictError, ValidationError, isPrismaKnownError } from '../utils/errors';
 import logger from '../config/logger';
+import { InventoryService } from './inventoryService';
 
 // Marketplace = matching CROSS-TENANT entre anunciantes e motoristas.
 // Cada cadastro cria sua própria company, então aqui NÃO filtramos por company_id:
@@ -91,6 +92,11 @@ export class MarketplaceService {
 
     const elegiveis = campaigns.filter((c) => this.matchesTargeting(c, profile));
 
+    // Quanto do dia dele já está comprometido. Vai junto de cada oportunidade
+    // para ele decidir sabendo o preço em tempo de tela, não só o que ganha —
+    // é o que permite trocar uma campanha grande por duas menores.
+    const capacity = await InventoryService.driverCapacity(profile.id);
+
     return elegiveis.map((c) => ({
       id: c.id,
       title: c.title,
@@ -107,7 +113,25 @@ export class MarketplaceService {
       createdAt: c.created_at,
       participated: participatedIds.includes(c.id), // Marca campanhas já participadas
       alreadyAccepted: acceptedIds.includes(c.id), // Marca campanhas aceitas agora
+
+      /** Quanto do dia esta campanha ocupa. */
+      dailyMinutes: c.daily_minutes,
+      dailyLabel: InventoryService.formatMinutes(c.daily_minutes),
+      /** Cabe no que sobrou? A tela usa para desabilitar o botão antes do erro. */
+      fits: c.daily_minutes <= capacity.availableMinutes,
     }));
+  }
+
+  /** Agenda do motorista: quanto do dia já está vendido e para quem. */
+  static async capacity(userId: string) {
+    const profile = await this.driverProfile(userId);
+    const capacity = await InventoryService.driverCapacity(profile.id);
+    return {
+      ...capacity,
+      capLabel: InventoryService.formatMinutes(capacity.capMinutes),
+      committedLabel: InventoryService.formatMinutes(capacity.committedMinutes),
+      availableLabel: InventoryService.formatMinutes(capacity.availableMinutes),
+    };
   }
 
   /** Motorista aceita rodar uma campanha (cria o vínculo CampaignMotorista). */
@@ -141,6 +165,20 @@ export class MarketplaceService {
         'Você precisa parear o tablet do carro antes de aceitar campanhas. Vá em Perfil e tablet para gerar o código.',
         'TABLET_NOT_PAIRED'
       );
+
+    // Cada campanha ocupa uma fatia fixa do dia dele, e o dia tem fim. Aceitar
+    // além do teto não faria a tela render mais — faria cada anunciante receber
+    // menos do que comprou, sem ninguém perceber até o relatório do mês.
+    //
+    // A checagem é aqui e não só na listagem: entre ver a oportunidade e tocar
+    // em aceitar, ele pode ter aceitado outra em outra aba.
+    const { ok, capacity } = await InventoryService.canAccept(profile.id, campaign.daily_minutes);
+    if (!ok) {
+      throw new ValidationError(
+        `Esta campanha ocupa ${InventoryService.formatMinutes(campaign.daily_minutes)} por dia e você tem ${InventoryService.formatMinutes(capacity.availableMinutes)} livres de ${InventoryService.formatMinutes(capacity.capMinutes)}. Recuse alguma campanha atual para liberar espaço.`,
+        'DAILY_MINUTES_EXCEEDED'
+      );
+    }
 
     try {
       const link = await prisma.campaignMotorista.create({

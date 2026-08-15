@@ -219,6 +219,21 @@ router.get(
 );
 
 /**
+ * GET /driver/capacity — quanto do dia já está vendido e para quem.
+ *
+ * O tablet tem um teto diário de tela, e cada campanha ocupa uma fatia fixa
+ * dele. É por aqui que o motorista vê quanto ainda pode aceitar.
+ */
+router.get(
+  '/capacity',
+  verifyJWT,
+  authorize(UserType.DRIVER),
+  asyncHandler(async (req: Request, res: Response) => {
+    res.status(200).json({ data: await MarketplaceService.capacity(req.user!.id) });
+  })
+);
+
+/**
  * GET /driver/work-summary — quanto rodei, quanto andei, quanto rendeu.
  *
  * Horas saem da diferença entre abrir e encerrar a jornada, e quilômetros da

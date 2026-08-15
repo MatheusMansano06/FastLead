@@ -5,6 +5,7 @@ import prisma from '../lib/prisma';
 import config from '../config/config';
 import logger from '../config/logger';
 import { NotFoundError, ValidationError } from '../utils/errors';
+import { InventoryService, SLOT_SECONDS } from './inventoryService';
 import { QRService } from './qrService';
 
 const PAIRING_TTL_MINUTES = 15;
@@ -423,6 +424,16 @@ export class TabletService {
       },
     });
 
+    // Peso de cada campanha na rotação: os minutos que ainda faltam entregar
+    // hoje. Quem já cumpriu a cota do dia não vem no mapa e sai da playlist,
+    // devolvendo os slots para quem ainda tem saldo — continuar exibindo o que
+    // já foi entregue tomaria tela de quem ainda não recebeu.
+    const pesos = await InventoryService.rotationWeights(
+      motoristaId,
+      assignments.map((a) => a.campaign.id)
+    );
+    const noAr = assignments.filter((a) => pesos.has(a.campaign.id));
+
     await prisma.tabletDevice.update({
       where: { id: device.id },
       data: { last_seen_at: new Date() },
@@ -433,7 +444,7 @@ export class TabletService {
     const sessao = await this.currentSession(device);
 
     const items = await Promise.all(
-      assignments.map(async (a) => {
+      noAr.map(async (a) => {
         const c = a.campaign;
 
         // Campanha sem QR (só marca) não gasta CPU gerando imagem nem carrega
@@ -461,6 +472,13 @@ export class TabletService {
           qrImage: qr?.qrCodeImageUrl ?? null,
           qrUrl: qr?.qrCodeData ?? null,
           forced: a.source === 'MASTER_FORCED',
+
+          /**
+           * Quantas vezes esta campanha aparece em relação às outras. São os
+           * minutos que faltam entregar hoje — quem comprou o dobro aparece o
+           * dobro, e quem está perto de completar vai perdendo espaço sozinho.
+           */
+          weight: pesos.get(c.id) ?? 1,
         };
       })
     );
@@ -481,10 +499,13 @@ export class TabletService {
       items,
       /**
        * Segundos por anúncio antes de girar para o próximo.
-       * 8s: tempo de o passageiro notar a tela e sacar o celular, sem queimar
-       * a corrida inteira num anunciante só quando há vários na playlist.
+       *
+       * 20s é a unidade em que o inventário é vendido: uma hora contratada são
+       * 180 aparições. Numa corrida típica de quinze minutos cabem 45 slots, o
+       * que com três anunciantes dá quinze aparições para cada — sobra para o
+       * passageiro notar a tela e sacar o celular.
        */
-      rotationSeconds: Number(process.env.TABLET_ROTATION_SECONDS || 8),
+      rotationSeconds: Number(process.env.TABLET_ROTATION_SECONDS || SLOT_SECONDS),
     };
   }
 

@@ -379,6 +379,17 @@ model Campaign {
   price_per_lead   Decimal? @db.Decimal(12, 2)
   daily_budget     Decimal? @db.Decimal(12, 2)
 
+  /// Minutos de tela por dia que esta campanha ocupa em cada tablet.
+  ///
+  /// É o inventário que a empresa compra. Não são minutos seguidos: viram
+  /// slots de 20 segundos espalhados pelo dia, e o peso deles na rotação sai
+  /// daqui — quem comprou o dobro aparece o dobro de vezes.
+  ///
+  /// O motorista tem um teto diário (ver DAILY_MINUTES_CAP) e vai somando
+  /// campanhas até enchê-lo. Em minutos, e não horas fracionadas, para não
+  /// existir "1,5 hora" arredondando de formas diferentes em cada conta.
+  daily_minutes Int @default(60)
+
   // Segmentação — array vazio significa "sem restrição"
   target_regions    Region[]
   target_states     String[] // UFs
@@ -699,6 +710,10 @@ model ImpressionEvent {
   @@index([motorista_id])
   @@index([shown_at])
   @@index([session_id])
+  /// Quanto desta campanha já rodou hoje no tablet deste motorista — é a
+  /// pergunta que a playlist faz a cada abertura para saber o que já entregou
+  /// a cota do dia e deve sair da rotação.
+  @@index([motorista_id, campaign_id, shown_at])
 }
 
 /// Scan: alguém leu o QR Code de fato. É a métrica de DIVULGAÇÃO.
