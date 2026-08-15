@@ -6,8 +6,25 @@ import { UserType } from '../types';
 import logger from '../config/logger';
 import { prisma } from '../lib/prisma';
 import { creditService } from '../services/payment/credit.service';
+import { ReportService } from '../services/reportService';
 
 const router = Router();
+
+/**
+ * Lê `from`/`to` da query em ISO.
+ *
+ * Data inválida é ignorada em vez de virar erro 400: um filtro digitado errado
+ * não deve impedir a empresa de ver o relatório — ela recebe o período inteiro
+ * e percebe pelo cabeçalho de `period`.
+ */
+function periodoDaQuery(req: Request): { from?: Date; to?: Date } {
+  const ler = (v: unknown): Date | undefined => {
+    if (typeof v !== 'string') return undefined;
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? undefined : d;
+  };
+  return { from: ler(req.query.from), to: ler(req.query.to) };
+}
 
 /**
  * GET /advertiser/motoristas
@@ -186,6 +203,33 @@ router.delete(
       campaignId
     );
     res.status(200).json({ message: 'Campanha deletada', data: result });
+  })
+);
+
+/**
+ * GET /advertiser/campaigns/:campaignId/report
+ *
+ * Relatório de entrega: o que a empresa recebeu pelo que pagou. Funil de
+ * impressão a lead convertido, circulação física (horas de tela, veículos,
+ * quilômetros, praças) e distribuição por hora do dia.
+ *
+ * Jornadas reprovadas pelo antifraude ficam de fora dos números e aparecem
+ * separadas em `excluded` — anúncio que rodou em tablet parado não foi visto
+ * por passageiro nenhum, e apresentar isso como entrega seria vender fumaça.
+ *
+ * `from` e `to` opcionais (ISO). Sem eles, vale da data de início da campanha
+ * até agora.
+ */
+router.get(
+  '/campaigns/:campaignId/report',
+  verifyJWT,
+  authorize(UserType.ADVERTISER),
+  asyncHandler(async (req: Request, res: Response) => {
+    const campaignId = String(req.params.campaignId);
+    const range = periodoDaQuery(req);
+
+    const relatorio = await ReportService.campaignReport(req.user!.companyId!, campaignId, range);
+    res.json({ message: 'Relatório da campanha', data: relatorio });
   })
 );
 

@@ -45,6 +45,23 @@ const GRACE_MINUTES = 30;
 /** Marco periódico da trilha, mesmo sem nada acontecer. */
 const HEARTBEAT_MINUTES = 5;
 
+/**
+ * Intervalo mínimo entre marcos de mudança de estado.
+ *
+ * Sem isto, trânsito lento vira enxurrada de linhas. O carro que anda menos que
+ * MIN_DISPLACEMENT_M entre duas leituras é lido como parado, e na leitura
+ * seguinte como andando de novo — observado alternando a cada ponto num teste
+ * de trajeto. Cada alternância gravaria uma linha, ~1 por leitura, e a
+ * economia de volume que motiva gravar só o notável desapareceria: voltaríamos
+ * às centenas de milhares de registros por dia que este desenho existe para
+ * evitar.
+ *
+ * Dois minutos não perdem nada que importe: quem decide fraude é a distância
+ * acumulada na janela de 30 minutos, e para isso o marco de 5 em 5 minutos já
+ * basta. A transição é conforto de leitura do trajeto, não prova.
+ */
+const MIN_TRANSITION_GAP_MINUTES = 2;
+
 /** Ping com relógio muito fora do nosso é descartado. */
 const MAX_CLOCK_SKEW_MIN = 15;
 
@@ -236,12 +253,16 @@ export class TelemetryService {
       // ele vem do app, que é justamente a parte que dá para adulterar.
       const movendo = avancou > 0 || p.isMoving === true;
 
+      const desdeUltimoMarco = marcoEm ? p.recordedAt.getTime() - marcoEm.getTime() : Infinity;
+      const mudouDeEstado = marcoMovendo !== null && movendo !== marcoMovendo;
+
       const virouMarco =
+        // GPS falso é prova e nunca é engolido por debounce.
         p.isMocked === true ||
         marcoEm === null ||
         marcoMovendo === null ||
-        movendo !== marcoMovendo ||
-        p.recordedAt.getTime() - marcoEm.getTime() >= HEARTBEAT_MINUTES * 60_000;
+        (mudouDeEstado && desdeUltimoMarco >= MIN_TRANSITION_GAP_MINUTES * 60_000) ||
+        desdeUltimoMarco >= HEARTBEAT_MINUTES * 60_000;
 
       if (virouMarco) {
         paraGravar.push({
@@ -257,11 +278,7 @@ export class TelemetryService {
           motion_gforce: p.motionGforce ?? null,
           orientation: p.orientation?.slice(0, 12) ?? null,
           is_mocked: p.isMocked === true,
-          reason: p.isMocked
-            ? 'MOCK'
-            : marcoMovendo !== null && movendo !== marcoMovendo
-              ? 'TRANSITION'
-              : 'HEARTBEAT',
+          reason: p.isMocked ? 'MOCK' : mudouDeEstado ? 'TRANSITION' : 'HEARTBEAT',
         });
         marcoEm = p.recordedAt;
         marcoMovendo = movendo;

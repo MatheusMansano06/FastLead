@@ -4,6 +4,7 @@ import { MotoristaService } from '../services/motoristaService';
 import { MarketplaceService } from '../services/marketplaceService';
 import { TabletService } from '../services/tabletService';
 import { ReviewService } from '../services/reviewService';
+import { ReportService } from '../services/reportService';
 import { UserType } from '../types';
 import logger from '../config/logger';
 
@@ -214,6 +215,33 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const limit = Math.min(90, Math.max(1, parseInt(String(req.query.limit || '30'), 10) || 30));
     res.status(200).json({ data: await TabletService.sessionHistory(req.user!.id, limit) });
+  })
+);
+
+/**
+ * GET /driver/work-summary — quanto rodei, quanto andei, quanto rendeu.
+ *
+ * Horas saem da diferença entre abrir e encerrar a jornada, e quilômetros da
+ * telemetria — nada é estimado por número de anúncios exibidos.
+ *
+ * `from`/`to` em ISO; sem eles, os últimos 30 dias.
+ */
+router.get(
+  '/work-summary',
+  verifyJWT,
+  authorize(UserType.DRIVER),
+  asyncHandler(async (req: Request, res: Response) => {
+    const lerData = (v: unknown): Date | undefined => {
+      if (typeof v !== 'string') return undefined;
+      const d = new Date(v);
+      return isNaN(d.getTime()) ? undefined : d;
+    };
+    const to = lerData(req.query.to) ?? new Date();
+    const from = lerData(req.query.from) ?? new Date(to.getTime() - 30 * 24 * 3600_000);
+
+    res.status(200).json({
+      data: await ReportService.driverWorkSummary(req.user!.id, from, to),
+    });
   })
 );
 
