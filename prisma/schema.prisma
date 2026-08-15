@@ -565,6 +565,40 @@ model TabletSession {
   unique_scans_count Int @default(0)
   leads_count        Int @default(0)
 
+  /// ----- Telemetria e antifraude -----
+  /// Estado vivo da jornada, reescrito a cada ping (UPDATE, não INSERT). O
+  /// tablet manda posição a cada poucos segundos; se cada uma virasse linha
+  /// nova, um turno de 100 tablets encheria o banco sozinho. A trilha
+  /// detalhada fica em TelemetryPing, que só grava o que é notável.
+  last_ping_at   DateTime? @db.Timestamp()
+  last_latitude  Float?
+  last_longitude Float?
+
+  /// Último instante com deslocamento real. Conta a partir daqui, não do
+  /// último ping — o ping chega igual com o tablet imóvel em cima da cama.
+  last_moving_at DateTime? @db.Timestamp()
+
+  /// Metros acumulados desde o início da jornada.
+  distance_meters Float @default(0)
+
+  /// Metros na janela móvel de 30 minutos. É este número que separa trânsito
+  /// de fraude: parado no viaduto ainda anda 200m em meia hora, tablet
+  /// esquecido em casa não anda nenhum. Olhar só "tempo parado agora"
+  /// reprovaria o motorista honesto preso no congestionamento.
+  recent_distance_meters Float @default(0)
+
+  /// Jornada sob suspeita: os scans continuam sendo gravados, mas não viram
+  /// lead nem comissão. Marcar em vez de descartar preserva a evidência e
+  /// permite desfazer se o veredito estiver errado.
+  is_suspect     Boolean   @default(false)
+  suspect_reason String?   @db.VarChar(40)
+  suspect_since  DateTime? @db.Timestamp()
+
+  /// Android entrega isFromMockProvider() em cada leitura. Uma ocorrência
+  /// contamina a jornada inteira e não é limpa depois — GPS falso não é
+  /// engano de sensor, é intenção.
+  mock_location_seen Boolean @default(false)
+
   created_at DateTime @default(now()) @db.Timestamp()
   updated_at DateTime @updatedAt @db.Timestamp()
 
@@ -573,11 +607,71 @@ model TabletSession {
   device            TabletDevice?     @relation(fields: [device_id], references: [id], onDelete: SetNull)
   impression_events ImpressionEvent[]
   scan_events       ScanEvent[]
+  telemetry_pings   TelemetryPing[]
 
   @@index([motorista_id])
   @@index([company_id])
   @@index([started_at])
   @@index([motorista_id, ended_at])
+  @@index([is_suspect])
+}
+
+/// Marco da trilha: onde o tablet estava e se estava se mexendo.
+///
+/// Não é um por ping. O tablet reporta a cada poucos segundos, mas só vira
+/// linha quando é notável — mudou de parado para andando (ou o contrário),
+/// passaram 5 minutos desde o último marco, ou veio GPS falso. É o suficiente
+/// para desenhar o trajeto, calcular a janela de 30 minutos e servir de prova
+/// depois, sem gravar meio milhão de linhas por dia.
+///
+/// GPS e movimento na mesma linha de propósito: o acelerômetro roda a dezenas
+/// de amostras por segundo e gravar amostra crua não responderia nada. O app
+/// fecha a janela localmente ("me mexi nestes segundos?") e manda o resumo
+/// junto da posição. É assim que a análise lê depois — parado no mapa E parado
+/// no acelerômetro é fraude; parado no mapa com o aparelho balançando é
+/// congestionamento.
+model TelemetryPing {
+  id         String @id @default(cuid())
+  session_id String
+
+  /// Sem FK de propósito: o TabletDevice é apagado quando a jornada encerra
+  /// (ver TabletService.endSession), e uma trilha de auditoria que perde o
+  /// aparelho de vista deixa de servir como prova.
+  device_id    String?
+  motorista_id String
+
+  /// Relógio do tablet e relógio do servidor. Os dois porque o do tablet é
+  /// palpite do aparelho — dá para atrasar de propósito, e a diferença entre
+  /// eles já é sinal.
+  recorded_at DateTime @db.Timestamp()
+  received_at DateTime @default(now()) @db.Timestamp()
+
+  latitude  Float
+  longitude Float
+
+  /// Raio de erro em metros. Ponto ruim (>100m) não acusa ninguém de estar
+  /// parado: o próprio erro do GPS explica a variação.
+  accuracy_m Float?
+  speed_mps  Float?
+
+  /// Resumo da janela do acelerômetro fechada neste marco.
+  is_moving     Boolean @default(false)
+  motion_gforce Float? // pico de aceleração na janela, em g
+
+  /// PORTRAIT | LANDSCAPE | FLAT — FLAT é o tablet deitado numa superfície.
+  orientation String? @db.VarChar(12)
+
+  is_mocked Boolean @default(false)
+
+  /// Por que este marco virou linha: TRANSITION | HEARTBEAT | MOCK | SCAN.
+  reason String @default("HEARTBEAT") @db.VarChar(12)
+
+  created_at DateTime @default(now()) @db.Timestamp()
+
+  session TabletSession @relation(fields: [session_id], references: [id], onDelete: Cascade)
+
+  @@index([session_id, recorded_at])
+  @@index([recorded_at])
 }
 
 /// Impressão: o anúncio foi exibido na tela do tablet
@@ -835,17 +929,17 @@ model AuditLog {
 model CampaignReview {
   id String @id @default(cuid())
 
-  campaign_id String
+  campaign_id  String
   motorista_id String
 
-  rating CampaignRating
-  comment String? @db.Text
+  rating  CampaignRating
+  comment String?        @db.Text
 
   created_at DateTime @default(now()) @db.Timestamp()
   updated_at DateTime @updatedAt @db.Timestamp()
 
   // Relations
-  campaign Campaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+  campaign  Campaign        @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
   motorista MotoristProfile @relation(fields: [motorista_id], references: [id], onDelete: Cascade)
 
   @@unique([campaign_id, motorista_id])

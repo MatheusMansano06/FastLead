@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { Prisma } from '@prisma/client';
 import QRCode from 'qrcode';
 import prisma from '../lib/prisma';
 import config from '../config/config';
@@ -167,14 +168,40 @@ export class TabletService {
     });
     if (aberta) return aberta;
 
-    return prisma.tabletSession.create({
-      data: {
-        company_id: device.company_id,
-        motorista_id: device.motorista_id,
-        device_id: device.id,
-      },
-      select: { id: true, started_at: true },
-    });
+    /**
+     * Ler-e-depois-criar é corrida: duas chamadas do tablet que cheguem juntas
+     * (a playlist e a telemetria, por exemplo) não acham jornada aberta e as
+     * duas criam a sua. Aconteceu de verdade — duas jornadas nascidas com 30ms
+     * de diferença para o mesmo aparelho.
+     *
+     * O estrago é silencioso e caro: impressões entram numa jornada e scans na
+     * outra, o resumo do motorista subconta, e o veredito antifraude fica numa
+     * jornada enquanto os leads nascem na outra — o bloqueio de comissão
+     * simplesmente não acontece.
+     *
+     * Quem garante a unicidade é um índice parcial no banco (uma jornada
+     * aberta por tablet). Aqui só tratamos a perda da corrida: se o índice
+     * recusou, é porque outra requisição acabou de criar — basta lê-la.
+     */
+    try {
+      return await prisma.tabletSession.create({
+        data: {
+          company_id: device.company_id,
+          motorista_id: device.motorista_id,
+          device_id: device.id,
+        },
+        select: { id: true, started_at: true },
+      });
+    } catch (e) {
+      if (!(e instanceof Prisma.PrismaClientKnownRequestError) || e.code !== 'P2002') {
+        throw e;
+      }
+      return prisma.tabletSession.findFirstOrThrow({
+        where: { device_id: device.id, ended_at: null },
+        orderBy: { started_at: 'desc' },
+        select: { id: true, started_at: true },
+      });
+    }
   }
 
   /**

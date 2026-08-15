@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { asyncHandler } from '../middleware';
 import { TabletService } from '../services/tabletService';
+import { TelemetryService } from '../services/telemetryService';
 import { TrackingService } from '../services/trackingService';
 import { ValidationError } from '../utils/errors';
 
@@ -58,6 +59,41 @@ router.post(
       sessao?.id
     );
     res.json({ data: result });
+  })
+);
+
+/**
+ * POST /tablet/telemetry — o tablet reporta onde esteve e se estava andando.
+ *
+ * Chega em lote: o aparelho acumula os pings e envia de tempos em tempos, para
+ * não gastar bateria e 4G do motorista com uma requisição a cada leitura. Se
+ * ficou sem sinal, manda o acumulado quando voltar — por isso cada ping traz
+ * o próprio horário em vez de valer o horário da requisição.
+ */
+router.post(
+  '/telemetry',
+  asyncHandler(async (req: Request, res: Response) => {
+    const pings = Array.isArray(req.body?.pings) ? req.body.pings : [];
+    // Teto por lote: um tablet offline por horas não deve conseguir despejar
+    // dezenas de milhares de pontos numa requisição só.
+    if (pings.length > 500) {
+      throw new ValidationError('Lote grande demais', 'TELEMETRY_BATCH_TOO_LARGE');
+    }
+    const status = await TelemetryService.recordForDevice(deviceToken(req), pings);
+    res.json({ data: status });
+  })
+);
+
+/**
+ * GET /tablet/status — o tablet pergunta se a jornada dele está valendo.
+ *
+ * O motorista é avisado de propósito quando cai em suspeita: deixar de pagar
+ * alguém sem dizer por quê é pior do que um fraudador aprender o limiar.
+ */
+router.get(
+  '/status',
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json({ data: await TelemetryService.statusForDevice(deviceToken(req)) });
   })
 );
 

@@ -3,6 +3,7 @@ import prisma from '../lib/prisma';
 import config from '../config/config';
 import logger from '../config/logger';
 import { NotFoundError } from '../utils/errors';
+import { TelemetryService } from './telemetryService';
 
 interface ScanContext {
   campaignId: string;
@@ -202,6 +203,7 @@ export class TrackingService {
         company_id: true,
         campaign_id: true,
         motorista_id: true,
+        session_id: true,
         scanned_at: true,
         ip_address: true,
         user_device: true,
@@ -212,6 +214,19 @@ export class TrackingService {
     if (!scan) throw new NotFoundError('Scan não encontrado');
     if (scan.lead) return { leadId: scan.lead.id, alreadyExisted: true };
 
+    /**
+     * Jornada sob suspeita não faz o lead desaparecer.
+     *
+     * O passageiro do outro lado pode ser real, e o contato dele é da empresa
+     * que pagou pelo anúncio — sumir com isso puniria o anunciante por um
+     * problema do motorista. O lead nasce INVALID: a empresa enxerga, mas
+     * `debitLeadConversion` se recusa a transformá-lo em comissão.
+     *
+     * Marcar em vez de descartar também deixa desfazer. Se o veredito estiver
+     * errado, basta voltar o status — o dado ainda está lá.
+     */
+    const { suspect, reason } = await TelemetryService.sessionIsSuspect(scan.session_id);
+
     const lead = await prisma.lead.create({
       data: {
         company_id: scan.company_id,
@@ -219,6 +234,7 @@ export class TrackingService {
         motorista_id: scan.motorista_id,
         scan_event_id: scan.id,
         qr_scan_time: scan.scanned_at,
+        status: suspect ? 'INVALID' : 'PENDING',
         contact_name: input.name?.slice(0, 255) || null,
         contact_email: input.email?.slice(0, 255) || null,
         contact_phone: input.phone?.slice(0, 20) || null,
@@ -227,6 +243,16 @@ export class TrackingService {
       },
       select: { id: true },
     });
+
+    if (suspect) {
+      logger.warn(
+        `Lead ${lead.id} nasceu INVALID — jornada ${scan.session_id} sob suspeita (${reason})`
+      );
+      // Sem incrementar contador: taxa de conversão e "leads gerados" são o que
+      // a empresa e o motorista leem para decidir. Somar lead reprovado ali
+      // inflaria justamente o número que a suspeita diz não valer.
+      return { leadId: lead.id, alreadyExisted: false, suspect: true };
+    }
 
     await prisma.campaign.update({
       where: { id: scan.campaign_id },
@@ -244,6 +270,6 @@ export class TrackingService {
       })
       .catch(() => {});
 
-    return { leadId: lead.id, alreadyExisted: false };
+    return { leadId: lead.id, alreadyExisted: false, suspect: false };
   }
 }

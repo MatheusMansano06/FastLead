@@ -370,6 +370,20 @@ router.patch(
       return;
     }
 
+    // Lead reprovado pelo antifraude. A checagem também existe dentro de
+    // debitLeadConversion, que é a trava de verdade — mas de lá só volta um
+    // `false`, que a resposta abaixo traduz como "saldo insuficiente". O
+    // anunciante recarregaria crédito para sempre sem descobrir o motivo.
+    if (lead.status === 'INVALID') {
+      res.status(409).json({
+        error: 'Lead não elegível',
+        message:
+          'Este lead veio de uma jornada sob suspeita antifraude e não pode ser convertido. Fale com o suporte se acredita que houve engano.',
+        code: 'LEAD_INVALID',
+      });
+      return;
+    }
+
     const debitou = await creditService.debitLeadConversion(lead.company_id, lead.id, valor);
 
     if (!debitou) {

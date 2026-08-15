@@ -334,7 +334,7 @@ export class CreditService {
 
     const lead = await prisma.lead.findUnique({
       where: { id: lead_id },
-      select: { motorista_id: true, company_id: true, campaign_id: true },
+      select: { motorista_id: true, company_id: true, campaign_id: true, status: true },
     });
 
     if (!lead) {
@@ -343,6 +343,15 @@ export class CreditService {
     }
     if (lead.company_id !== company_id) {
       console.error(`[CREDIT] Lead ${lead_id} não pertence à empresa ${company_id}`);
+      return false;
+    }
+    // Lead reprovado não vira dinheiro. Chega aqui marcado quando a jornada que
+    // o gerou estava sob suspeita antifraude (tablet sem deslocamento, GPS
+    // falso). A trava fica neste ponto de propósito: é o único lugar por onde
+    // a comissão passa, e é aqui que ela precisa ser negada mesmo que alguma
+    // tela futura tente converter o lead sem olhar o status.
+    if (lead.status === 'INVALID') {
+      console.warn(`[CREDIT] Lead ${lead_id} está INVALID — comissão negada`);
       return false;
     }
 
