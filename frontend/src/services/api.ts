@@ -60,8 +60,7 @@ class ApiClient {
         // sabendo o que fazer. Traz a mensagem do servidor para `message`, que
         // é o que as telas leem.
         const dados = error.response?.data as
-          | { message?: string; error?: string; code?: string }
-          | undefined;
+          { message?: string; error?: string; code?: string } | undefined;
         const doServidor = dados?.message || dados?.error;
         if (doServidor) error.message = doServidor;
 
@@ -174,26 +173,55 @@ class ApiClient {
     }
   }
 
-  async createCampaign(data: any) {
+  /**
+   * Quanto custaria, sem criar nada.
+   *
+   * O preço vem do servidor de propósito, e não de uma conta feita aqui: a
+   * mesma função que simula é a que cobra. Fórmula duplicada no navegador
+   * acabaria divergindo da fatura, e a empresa descobriria depois de assinar.
+   */
+  async simulateCampaign(data: {
+    numVehicles: number;
+    dailyMinutes: number;
+    startDate?: string;
+    endDate?: string;
+    durationDays?: number;
+    targetCities?: string[];
+  }) {
     try {
-      const formData = new FormData();
-      formData.append('name', data.name);
-      formData.append('description', data.description);
-      formData.append('budget', data.budget);
-      formData.append('pricePerLead', data.pricePerLead);
-      formData.append('startDate', data.startDate);
-      formData.append('endDate', data.endDate);
-      formData.append('taxiCount', data.taxiCount);
+      const response = await this.client.post('/advertiser/campaigns/simulate', data);
+      return response.data?.data;
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
 
-      if (data.image instanceof File) {
-        formData.append('image', data.image);
-      }
-
-      const response = await this.client.post('/advertiser/campaigns', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+  /**
+   * Cria a campanha.
+   *
+   * JSON, e com os nomes que a rota espera. A versão anterior montava um
+   * multipart com `name`, `budget` e `taxiCount` — o backend lê `title`,
+   * `numVehicles` e `dailyMinutes` de `req.body`, e não tem middleware de
+   * multipart, então `req.body` chegava indefinido e a criação estourava 500.
+   * A tela existia inteira e nunca criou uma campanha.
+   *
+   * A imagem vai como data-URL dentro do JSON, que é o formato que a coluna
+   * `image_url` guarda.
+   */
+  async createCampaign(data: {
+    title: string;
+    description?: string;
+    imageUrl?: string | null;
+    numVehicles: number;
+    dailyMinutes: number;
+    pricePerLead: number;
+    startDate?: string;
+    endDate?: string;
+    durationDays?: number;
+    targetCities?: string[];
+  }) {
+    try {
+      const response = await this.client.post('/advertiser/campaigns', data);
       return response.data;
     } catch (error) {
       throw this.handleError(error);
@@ -513,7 +541,11 @@ class ApiClient {
     return r.data as { pagos: number; valor: number };
   }
 
-  async masterSetAssignment(campaignId: string, motoristaId: string, action: 'FORCE' | 'BLOCK' | 'CLEAR') {
+  async masterSetAssignment(
+    campaignId: string,
+    motoristaId: string,
+    action: 'FORCE' | 'BLOCK' | 'CLEAR'
+  ) {
     const r = await this.client.post('/admin/assignments', { campaignId, motoristaId, action });
     return r.data.data;
   }

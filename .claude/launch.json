@@ -2,18 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "FastLead Frontend",
+      "name": "frontend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "cwd": "/Users/Matheus/Desktop/FastLead/frontend",
+      "runtimeArgs": ["run", "dev", "--prefix", "frontend"],
       "port": 5173
-    },
-    {
-      "name": "FastLead Backend",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "cwd": "/Users/Matheus/Desktop/FastLead",
-      "port": 3000
     }
   ]
 }
