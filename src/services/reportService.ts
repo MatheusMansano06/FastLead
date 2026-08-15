@@ -54,6 +54,25 @@ export interface CampaignReport {
     cities: Array<{ city: string; state: string; journeys: number }>;
   };
 
+  /**
+   * Quanto saiu do saldo por esta campanha, e o que cada resultado custou.
+   *
+   * Os valores vêm dos lançamentos da carteira — o que de fato foi debitado —
+   * e nunca de multiplicar leads pelo preço de tabela de hoje. Preço muda; o
+   * que já foi cobrado, não.
+   */
+  cost: {
+    /** Débito de criação da campanha. */
+    setup: number;
+    /** Repasses por lead convertido nesta campanha. */
+    perLeadPayouts: number;
+    invested: number;
+    /** Nulos enquanto não houve resultado — não existe custo por zero leads. */
+    costPerLead: number | null;
+    costPerConversion: number | null;
+    costPerUniqueScan: number | null;
+  };
+
   /** Quando o anúncio apareceu — 0 a 23, hora local do servidor. */
   byHour: Array<{ hour: number; impressions: number }>;
 
@@ -188,6 +207,10 @@ export class ReportService {
     const pct = (parte: number, todo: number) =>
       todo > 0 ? Math.round((parte / todo) * 1000) / 10 : null;
 
+    const custo = await this.campaignCost(companyId, campaignId);
+    const porResultado = (total: number, quantidade: number) =>
+      quantidade > 0 ? Math.round((total / quantidade) * 100) / 100 : null;
+
     return {
       campaign: {
         id: campaign.id,
@@ -214,6 +237,14 @@ export class ReportService {
         screenShare: pct(impressoes, impressoesDaJornada),
         cities: [...porCidade.values()].sort((a, b) => b.journeys - a.journeys),
       },
+      cost: {
+        setup: custo.setup,
+        perLeadPayouts: custo.perLeadPayouts,
+        invested: custo.invested,
+        costPerLead: porResultado(custo.invested, leads),
+        costPerConversion: porResultado(custo.invested, convertidos),
+        costPerUniqueScan: porResultado(custo.invested, unicos),
+      },
       byHour: await this.impressionsByHour(companyId, campaignId, from, to),
       excluded: {
         journeys: reprovadas.length,
@@ -221,6 +252,46 @@ export class ReportService {
         reason:
           'Jornadas reprovadas pela verificação antifraude (sem deslocamento comprovado ou localização simulada). Não entram na entrega nem são cobradas.',
       },
+    };
+  }
+
+  /**
+   * O que esta campanha custou à empresa.
+   *
+   * Soma os lançamentos da carteira, que são o registro do que de fato saiu do
+   * saldo. Multiplicar leads pelo preço de tabela daria outro número sempre que
+   * o preço mudasse, e reescreveria retroativamente o custo de campanhas já
+   * encerradas.
+   *
+   * O repasse por lead não guarda `campaign_id` no lançamento — ele referencia
+   * o lead — então a ligação com a campanha passa por ali.
+   */
+  private static async campaignCost(companyId: string, campaignId: string) {
+    const [criacao, repasses] = await prisma.$transaction([
+      prisma.companyCreditTx.aggregate({
+        where: { company_id: companyId, campaign_id: campaignId, type: 'CAMPAIGN_DEBIT' },
+        _sum: { amount: true },
+      }),
+      prisma.companyCreditTx.aggregate({
+        where: {
+          company_id: companyId,
+          type: 'LEAD_PAYOUT',
+          lead_id: { not: null },
+          lead: { campaign_id: campaignId },
+        },
+        _sum: { amount: true },
+      }),
+    ]);
+
+    // Decimal do Prisma vira número só na borda de saída: fazer conta em ponto
+    // flutuante com dinheiro é como se perde centavo.
+    const setup = Number(criacao._sum.amount ?? 0);
+    const perLeadPayouts = Number(repasses._sum.amount ?? 0);
+
+    return {
+      setup,
+      perLeadPayouts,
+      invested: Math.round((setup + perLeadPayouts) * 100) / 100,
     };
   }
 
