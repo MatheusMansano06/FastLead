@@ -152,6 +152,8 @@ export class AuthService {
           email: user.email,
           type,
           companyId: finalCompanyId,
+          name: user.name,
+          avatarUrl: user.avatar_url,
         },
       };
     } catch (error: unknown) {
@@ -220,6 +222,8 @@ export class AuthService {
         email: user.email,
         type: userType,
         companyId: user.company_id,
+        name: user.name,
+        avatarUrl: user.avatar_url,
       },
     };
   }
@@ -272,6 +276,8 @@ export class AuthService {
         email: user.email,
         type: userType,
         companyId: user.company_id,
+        name: user.name,
+        avatarUrl: user.avatar_url,
       },
     };
   }
@@ -297,6 +303,7 @@ export class AuthService {
         type: true,
         company_id: true,
         is_active: true,
+        avatar_url: true,
         motorista_profile: {
           select: {
             vehicle_info: true,

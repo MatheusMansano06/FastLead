@@ -43,6 +43,12 @@ export default function HomeMotorista() {
   const [busy, setBusy] = useState(null); // campaignId sendo aceito
   const [toast, setToast] = useState('');
   const [temTablet, setTemTablet] = useState(null); // null = ainda carregando
+  /**
+   * Identidade conferida pelo admin. Sem isso o backend recusa o pareamento,
+   * então o aviso de "sem tablet" precisa saber qual dos dois passos falta —
+   * mandar para o pareamento quem ainda nem enviou documento é beco sem saída.
+   */
+  const [verificado, setVerificado] = useState(null);
   const [confirmarRemocao, setConfirmarRemocao] = useState(null);
   const [removendo, setRemovendo] = useState(false);
   const [sessions, setSessions] = useState(null);
@@ -75,6 +81,11 @@ export default function HomeMotorista() {
       setTemTablet(ds.some((d) => d.status === 'ACTIVE'));
     } catch {
       setTemTablet(null); // erro de rede não deve virar um aviso falso de "sem tablet"
+    }
+    try {
+      setVerificado((await apiClient.getMyTabletRequest()).verified);
+    } catch {
+      setVerificado(null);
     }
   }, []);
 
@@ -311,17 +322,26 @@ export default function HomeMotorista() {
             {temTablet === false && (
               <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-5 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="font-semibold text-amber-900">Pareie o tablet para começar</p>
+                  <p className="font-semibold text-amber-900">
+                    {verificado === false
+                      ? 'Confirme seus documentos para começar'
+                      : 'Pareie o tablet para começar'}
+                  </p>
                   <p className="mt-0.5 text-sm text-amber-800/80">
-                    O anúncio precisa de uma tela para aparecer. Sem tablet pareado você ainda não
-                    consegue aceitar campanhas.
+                    {verificado === false
+                      ? 'Antes de rodar anúncios precisamos conferir quem você é. Leva 2 minutos.'
+                      : 'O anúncio precisa de uma tela para aparecer. Sem tablet pareado você ainda não consegue aceitar campanhas.'}
                   </p>
                 </div>
                 <button
-                  onClick={() => setMostrarPareamento(true)}
+                  onClick={() =>
+                    verificado === false
+                      ? navigate('/app/motorista/tablet')
+                      : setMostrarPareamento(true)
+                  }
                   className="shrink-0 rounded-xl bg-amber-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-800"
                 >
-                  Parear tablet
+                  {verificado === false ? 'Enviar documentos' : 'Parear tablet'}
                 </button>
               </div>
             )}

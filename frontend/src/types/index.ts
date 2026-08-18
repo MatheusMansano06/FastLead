@@ -8,6 +8,8 @@ export interface User {
   name?: string;
   fullName?: string;
   companyId?: string;
+  /** Foto de perfil como data-URL. Sem ela o cabeçalho mostra as iniciais. */
+  avatarUrl?: string | null;
 }
 
 export interface AuthResponse {

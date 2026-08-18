@@ -2,7 +2,8 @@ import { Router, Request, Response } from 'express';
 import { verifyJWT, authorize, asyncHandler } from '../middleware';
 import { UserType } from '../types';
 import { AdminService, MasterFilters } from '../services/adminService';
-import { Region, RideApp, RideCategory } from '@prisma/client';
+import { Region, RideApp, RideCategory, TabletRequestStatus } from '@prisma/client';
+import { TabletRequestService } from '../services/tabletRequestService';
 import { creditService } from '../services/payment/credit.service';
 import { prisma } from '../lib/prisma';
 
@@ -224,7 +225,9 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const { page, limit } = pageOf(req);
     const filters = { status: req.query.status ? String(req.query.status) : undefined };
-    res.json({ data: await AdminService.companyLeads(String(req.params.id), page, limit, filters) });
+    res.json({
+      data: await AdminService.companyLeads(String(req.params.id), page, limit, filters),
+    });
   })
 );
 
@@ -252,7 +255,9 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const { page, limit } = pageOf(req);
     const filters = { status: req.query.status ? String(req.query.status) : undefined };
-    res.json({ data: await AdminService.driverEarnings(String(req.params.id), page, limit, filters) });
+    res.json({
+      data: await AdminService.driverEarnings(String(req.params.id), page, limit, filters),
+    });
   })
 );
 
@@ -291,7 +296,9 @@ router.post(
       res.status(400).json({ error: 'reason é obrigatório' });
       return;
     }
-    res.json({ data: await AdminService.suspendDriver(req.user!.id, String(req.params.id), reason) });
+    res.json({
+      data: await AdminService.suspendDriver(req.user!.id, String(req.params.id), reason),
+    });
   })
 );
 
@@ -300,6 +307,72 @@ router.post(
   '/drivers/:id/activate',
   asyncHandler(async (req: Request, res: Response) => {
     res.json({ data: await AdminService.activateDriver(req.user!.id, String(req.params.id)) });
+  })
+);
+
+// ============================================================================
+// SOLICITAÇÕES DE TABLET — verificação de identidade e comodato
+// ============================================================================
+
+/** GET /admin/tablet-requests?status=PENDING — a fila. Sem fotos. */
+router.get(
+  '/tablet-requests',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { page, limit } = pageOf(req);
+    const raw = req.query.status ? String(req.query.status) : undefined;
+    const status = raw && raw in TabletRequestStatus ? (raw as TabletRequestStatus) : undefined;
+    res.json({ data: await TabletRequestService.listForAdmin({ status, page, limit }) });
+  })
+);
+
+/**
+ * GET /admin/tablet-requests/:id — detalhe com as fotos.
+ *
+ * Único endpoint que devolve documento: a listagem fica sem foto de propósito.
+ */
+router.get(
+  '/tablet-requests/:id',
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json({ data: await TabletRequestService.detailForAdmin(String(req.params.id)) });
+  })
+);
+
+/** POST /admin/tablet-requests/:id/approve — libera (e gera o código, se for comodato) */
+router.post(
+  '/tablet-requests/:id/approve',
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json({
+      data: await TabletRequestService.approve(String(req.params.id), req.user!.id),
+    });
+  })
+);
+
+/** POST /admin/tablet-requests/:id/reject — recusa com motivo; ele pode tentar de novo */
+router.post(
+  '/tablet-requests/:id/reject',
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json({
+      data: await TabletRequestService.reject(
+        String(req.params.id),
+        req.user!.id,
+        String(req.body?.reason ?? '')
+      ),
+    });
+  })
+);
+
+/** POST /admin/tablet-requests/:id/deliver — sócio confirma a entrega em mãos */
+router.post(
+  '/tablet-requests/:id/deliver',
+  asyncHandler(async (req: Request, res: Response) => {
+    const b = req.body ?? {};
+    res.json({
+      data: await TabletRequestService.deliver(String(req.params.id), req.user!.id, {
+        code: String(b.code ?? ''),
+        deviceIdentifier: b.deviceIdentifier,
+        deviceId: b.deviceId,
+      }),
+    });
   })
 );
 

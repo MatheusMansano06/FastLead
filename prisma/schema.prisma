@@ -173,6 +173,27 @@ enum QrPosition {
   BOTTOM_RIGHT
 }
 
+/// De onde vem o tablet que o motorista vai usar.
+enum TabletAcquisition {
+  /// Aparelho do próprio motorista. Não há comodato: nada nosso sai de casa.
+  OWN_DEVICE
+  /// Aparelho da FastLead emprestado por contrato de comodato.
+  FASTLEAD_LOAN
+}
+
+/// Etapas da solicitação de acesso ao tablet.
+///
+/// PENDING → APPROVED → DELIVERED é o caminho feliz do comodato. Quem usa
+/// aparelho próprio para em APPROVED: não há entrega a confirmar.
+enum TabletRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  DELIVERED
+  /// Aprovado mas não retirado dentro do prazo. O motorista pode pedir de novo.
+  EXPIRED
+}
+
 // ============================================================================
 // CORE ENTITIES
 // ============================================================================
@@ -208,6 +229,7 @@ model Company {
   scan_events         ScanEvent[]
   impression_events   ImpressionEvent[]
   sessions            TabletSession[]
+  tablet_requests     TabletRequest[]
 
   // Crédito pré-pago da empresa para criar anúncios
   credit_balance       Decimal             @default(0) @db.Decimal(12, 2)
@@ -247,6 +269,9 @@ model User {
   campaigns          Campaign[]         @relation("CampaignCreator")
   leads              Lead[]
   audit_logs         AuditLog[]
+
+  /// Solicitações de tablet que este usuário (ADMIN) analisou.
+  reviewed_tablet_requests TabletRequest[] @relation("TabletRequestReviewer")
 
   @@unique([company_id, email])
   @@index([company_id])
@@ -299,6 +324,7 @@ model MotoristProfile {
   bank_account      DriverBankAccount?
   earnings          DriverEarning[]
   reviews           CampaignReview[]
+  tablet_requests   TabletRequest[]
 
   @@unique([company_id, user_id])
   @@index([company_id])
@@ -551,6 +577,7 @@ model TabletDevice {
   impression_events ImpressionEvent[]
   scan_events       ScanEvent[]
   sessions          TabletSession[]
+  tablet_request    TabletRequest?
 
   @@index([company_id])
   @@index([motorista_id])
@@ -960,5 +987,90 @@ model CampaignReview {
   @@unique([campaign_id, motorista_id])
   @@index([campaign_id])
   @@index([motorista_id])
+  @@index([created_at])
+}
+
+// ============================================================================
+// ONBOARDING DO MOTORISTA — VERIFICAÇÃO DE IDENTIDADE E COMODATO
+// ============================================================================
+
+/// Pedido do motorista para colocar um tablet para rodar.
+///
+/// Todo motorista passa por aqui, inclusive quem já tem aparelho próprio: a
+/// verificação de identidade é portão de entrada da plataforma, não só
+/// garantia do equipamento. O que muda entre os dois caminhos é o comodato —
+/// só quem leva tablet nosso assina contrato e recebe código de retirada.
+///
+/// Não há UNIQUE por motorista de propósito: recusa não é fim de linha, e
+/// código expirado pode ser pedido de novo. O pedido que vale é sempre o mais
+/// recente; os anteriores ficam como histórico de quem tentou o quê e quando.
+model TabletRequest {
+  id           String @id @default(cuid())
+  company_id   String
+  motorista_id String
+
+  acquisition TabletAcquisition
+  status      TabletRequestStatus @default(PENDING)
+
+  /// Tentativa nº. Começa em 1 e sobe a cada novo pedido do mesmo motorista;
+  /// três recusas seguidas é sinal de que alguém precisa olhar a conta.
+  attempt Int @default(1)
+
+  /// ----- Verificação de identidade -----
+  /// Text e não VarChar: as fotos vêm como data-URL redimensionada no cliente,
+  /// mesmo caminho de `User.avatar_url`. Documento precisa de mais resolução
+  /// que um avatar, então cada linha aqui pesa algumas centenas de KB.
+  ///
+  /// São dado pessoal sensível: nunca devolver estes campos em listagem, só
+  /// no detalhe de um pedido e só para ADMIN.
+  selfie_photo    String @db.Text
+  doc_front_photo String @db.Text
+  doc_back_photo  String @db.Text
+
+  /// ----- Análise -----
+  reviewed_by_id   String?
+  reviewed_at      DateTime? @db.Timestamp()
+  rejection_reason String?   @db.VarChar(500)
+
+  /// ----- Retirada (só no comodato) -----
+  /// Código que o motorista mostra na tela e o sócio confere na entrega.
+  /// Nasce na aprovação, não no envio: antes de aprovar não há o que retirar.
+  /// UNIQUE aceita vários NULLs, então pedidos sem código não colidem.
+  withdrawal_code       String?   @unique @db.VarChar(12)
+  /// 48h a partir da aprovação. Passou disso vira EXPIRED e o motorista pede
+  /// de novo — assim a fila de aprovados reflete quem realmente vai buscar.
+  withdrawal_expires_at DateTime? @db.Timestamp()
+
+  /// ----- Comodato -----
+  /// Aceite feito na plataforma. A assinatura em papel continua acontecendo na
+  /// entrega; isto aqui é o registro de que ele leu antes de sair de casa.
+  contract_accepted_at DateTime? @db.Timestamp()
+  /// Nome digitado pelo motorista no aceite, guardado como ele escreveu.
+  contract_signature   String?   @db.VarChar(255)
+  contract_ip          String?   @db.VarChar(50)
+  /// Versão do texto aceito. Quando o contrato mudar, os aceites antigos
+  /// continuam apontando para o que a pessoa de fato leu.
+  contract_version     String?   @db.VarChar(20)
+
+  /// ----- Entrega -----
+  delivered_at      DateTime? @db.Timestamp()
+  delivered_by_id   String?   @db.VarChar(30)
+  /// Qual aparelho físico saiu. É o que liga pessoa ↔ tablet quando um
+  /// sumir — sem isso o comodato não tem objeto.
+  device_id         String?   @unique
+  /// Anotado na entrega: número de série, patrimônio, o que o sócio usar.
+  device_identifier String?   @db.VarChar(120)
+
+  created_at DateTime @default(now()) @db.Timestamp()
+  updated_at DateTime @updatedAt @db.Timestamp()
+
+  company     Company         @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  motorista   MotoristProfile @relation(fields: [motorista_id], references: [id], onDelete: Cascade)
+  reviewed_by User?           @relation("TabletRequestReviewer", fields: [reviewed_by_id], references: [id], onDelete: SetNull)
+  device      TabletDevice?   @relation(fields: [device_id], references: [id], onDelete: SetNull)
+
+  @@index([company_id])
+  @@index([motorista_id])
+  @@index([status])
   @@index([created_at])
 }

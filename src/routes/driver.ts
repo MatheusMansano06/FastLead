@@ -3,6 +3,7 @@ import { verifyJWT, authorize, asyncHandler } from '../middleware';
 import { MotoristaService } from '../services/motoristaService';
 import { MarketplaceService } from '../services/marketplaceService';
 import { TabletService } from '../services/tabletService';
+import { TabletRequestService } from '../services/tabletRequestService';
 import { ReviewService } from '../services/reviewService';
 import { ReportService } from '../services/reportService';
 import { UserType } from '../types';
@@ -197,6 +198,45 @@ router.patch(
  * POST /driver/devices/pair-code
  * Gera o código de 6 dígitos que o motorista digita no tablet do carro.
  */
+/**
+ * GET /driver/tablet-request — em que pé está a verificação de identidade.
+ *
+ * É o que a tela usa para saber se mostra o formulário, o "em análise", o
+ * motivo da recusa ou o código de retirada.
+ */
+router.get(
+  '/tablet-request',
+  verifyJWT,
+  authorize(UserType.DRIVER),
+  asyncHandler(async (req: Request, res: Response) => {
+    res.status(200).json({ data: await TabletRequestService.myRequest(req.user!.id) });
+  })
+);
+
+/**
+ * POST /driver/tablet-request — envia selfie e documento e, no comodato,
+ * o aceite do contrato.
+ */
+router.post(
+  '/tablet-request',
+  verifyJWT,
+  authorize(UserType.DRIVER),
+  asyncHandler(async (req: Request, res: Response) => {
+    const b = req.body ?? {};
+    const created = await TabletRequestService.create(req.user!.id, {
+      acquisition: b.acquisition,
+      selfiePhoto: b.selfiePhoto,
+      docFrontPhoto: b.docFrontPhoto,
+      docBackPhoto: b.docBackPhoto,
+      contractSignature: b.contractSignature,
+      avatarPhoto: b.avatarPhoto,
+      // Guardado junto do aceite: é o que dá lastro ao "li e concordo".
+      contractIp: req.ip,
+    });
+    res.status(201).json({ message: 'Documentos enviados para análise', data: created });
+  })
+);
+
 router.post(
   '/devices/pair-code',
   verifyJWT,

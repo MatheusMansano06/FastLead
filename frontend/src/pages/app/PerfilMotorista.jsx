@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import AppHeader from '../../components/app/AppHeader';
 import AcessoTablet from '../../components/app/AcessoTablet';
 import { apiClient } from '../../services/api';
+import { useAuthStore } from '../../stores/authStore';
 
 /**
  * Perfil do motorista: foto, dados e — o que faz a plataforma funcionar —
@@ -95,6 +96,7 @@ const inputCls =
 export default function PerfilMotorista() {
   const navigate = useNavigate();
   const fileRef = useRef(null);
+  const setAvatar = useAuthStore((s) => s.setAvatar);
 
   const [catalog, setCatalog] = useState(null);
   const [form, setForm] = useState({
@@ -185,6 +187,9 @@ export default function PerfilMotorista() {
     setMessage(null);
     try {
       await apiClient.updateDriverProfile(form);
+      // O cabeçalho lê o usuário guardado no login; sem avisar aqui, a foto
+      // nova só apareceria lá no próximo acesso.
+      setAvatar(form.avatarUrl || null);
       setMessage({ type: 'ok', text: 'Perfil salvo' });
     } catch (err) {
       setMessage({

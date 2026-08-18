@@ -7,6 +7,7 @@ import logger from '../config/logger';
 import { NotFoundError, ValidationError } from '../utils/errors';
 import { InventoryService, SLOT_SECONDS } from './inventoryService';
 import { QRService } from './qrService';
+import { TabletRequestService } from './tabletRequestService';
 
 const PAIRING_TTL_MINUTES = 15;
 
@@ -31,6 +32,11 @@ export class TabletService {
    */
   static async createPairingCode(userId: string, label?: string) {
     const profile = await this.driverProfile(userId);
+
+    // Identidade verificada é pré-requisito para qualquer tablet entrar no ar,
+    // inclusive o do próprio motorista: é aqui que o cadastro deixa de ser um
+    // e-mail e passa a ser uma pessoa com documento conferido.
+    await TabletRequestService.assertVerified(profile.id);
 
     // Um código vivo por vez por motorista, para não acumular pendências.
     await prisma.tabletDevice.deleteMany({

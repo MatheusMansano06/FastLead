@@ -3,6 +3,48 @@ import { AuthResponse, LoginPayload, RegisterPayload, ApiError } from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
+export type TabletAcquisition = 'OWN_DEVICE' | 'FASTLEAD_LOAN';
+export type TabletRequestStatus =
+  | 'PENDING'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'DELIVERED'
+  | 'EXPIRED';
+
+/**
+ * Solicitação de tablet como ela volta da API. As fotos de documento só vêm no
+ * detalhe do admin — nunca em listagem nem para o próprio motorista.
+ */
+export interface TabletRequest {
+  id: string;
+  acquisition: TabletAcquisition;
+  status: TabletRequestStatus;
+  attempt: number;
+  rejection_reason: string | null;
+  reviewed_at: string | null;
+  withdrawal_code: string | null;
+  withdrawal_expires_at: string | null;
+  contract_accepted_at: string | null;
+  contract_signature: string | null;
+  contract_version: string | null;
+  delivered_at: string | null;
+  device_identifier: string | null;
+  created_at: string;
+}
+
+export interface TabletRequestDriver {
+  id: string;
+  cpf: string | null;
+  phone: string | null;
+  city: string | null;
+  state: string | null;
+  license_plate: string | null;
+  vehicle_info?: string | null;
+  status?: string;
+  created_at?: string;
+  user: { name: string; email: string; avatar_url?: string | null };
+}
+
 class ApiClient {
   private client: AxiosInstance;
   private tokenKey = 'auth_token';
@@ -464,7 +506,89 @@ class ApiClient {
     return r.data.data;
   }
 
+  /**
+   * GET cru, devolvendo a resposta do axios inteira.
+   *
+   * As telas de detalhe do admin já chamavam `apiClient.get(...)` — um método
+   * que nunca existiu, então elas quebravam ao abrir. Em vez de reescrever
+   * cada chamada, o método passa a existir com o formato que elas esperam
+   * (`res.data.data`).
+   */
+  async get(url: string, config?: Record<string, unknown>) {
+    return this.client.get(url, config);
+  }
+
+  // ===== Verificação de identidade e comodato do tablet =====
+  async getMyTabletRequest() {
+    const r = await this.client.get('/driver/tablet-request');
+    return r.data.data as {
+      request: TabletRequest | null;
+      /** Aprovado ou entregue: é o que destrava o pareamento. */
+      verified: boolean;
+      contractVersion: string;
+    };
+  }
+
+  async createTabletRequest(payload: {
+    acquisition: 'OWN_DEVICE' | 'FASTLEAD_LOAN';
+    selfiePhoto: string;
+    docFrontPhoto: string;
+    docBackPhoto: string;
+    /** Recorte quadrado da selfie — vira a foto de perfil do motorista. */
+    avatarPhoto?: string;
+    /** Nome digitado no aceite — só no comodato. */
+    contractSignature?: string;
+  }) {
+    const r = await this.client.post('/driver/tablet-request', payload);
+    return r.data.data as TabletRequest;
+  }
+
   // ===== MASTER (admin) =====
+  async masterTabletRequests(status?: string, page = 1, limit = 50) {
+    const r = await this.client.get('/admin/tablet-requests', {
+      params: { ...(status ? { status } : {}), page, limit },
+    });
+    return r.data.data as {
+      items: (TabletRequest & { motorista: TabletRequestDriver })[];
+      total: number;
+      page: number;
+      limit: number;
+      countsByStatus: Record<string, number>;
+    };
+  }
+
+  /** Único endpoint que traz as fotos do documento — carregue só ao abrir o detalhe. */
+  async masterTabletRequestDetail(id: string) {
+    const r = await this.client.get(`/admin/tablet-requests/${id}`);
+    return r.data.data as TabletRequest & {
+      selfiePhoto?: string;
+      selfie_photo: string;
+      doc_front_photo: string;
+      doc_back_photo: string;
+      contract_ip: string | null;
+      reviewed_by: { name: string } | null;
+      motorista: TabletRequestDriver;
+    };
+  }
+
+  async approveTabletRequest(id: string) {
+    const r = await this.client.post(`/admin/tablet-requests/${id}/approve`);
+    return r.data.data as TabletRequest;
+  }
+
+  async rejectTabletRequest(id: string, reason: string) {
+    const r = await this.client.post(`/admin/tablet-requests/${id}/reject`, { reason });
+    return r.data.data as TabletRequest;
+  }
+
+  async deliverTabletRequest(
+    id: string,
+    payload: { code: string; deviceIdentifier: string; deviceId?: string }
+  ) {
+    const r = await this.client.post(`/admin/tablet-requests/${id}/deliver`, payload);
+    return r.data.data as TabletRequest;
+  }
+
   async masterOverview(filters: Record<string, string> = {}) {
     const r = await this.client.get('/admin/overview', { params: filters });
     return r.data.data;

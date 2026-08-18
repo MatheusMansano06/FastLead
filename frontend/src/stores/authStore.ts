@@ -36,9 +36,17 @@ interface AuthStore {
   logout: () => Promise<void>;
   clearError: () => void;
   checkAuth: () => void;
+  /**
+   * Troca a foto de perfil já carregada, sem refazer o login.
+   *
+   * O usuário do cabeçalho vem do que foi salvo no login, então uma foto nova
+   * só apareceria lá no próximo acesso — o motorista trocaria a foto, olharia
+   * para o canto da tela e veria a inicial antiga.
+   */
+  setAvatar: (avatarUrl: string | null) => void;
 }
 
-export const useAuthStore = create<AuthStore>((set) => ({
+export const useAuthStore = create<AuthStore>((set, get) => ({
   user: loadUser(),
   isLoading: false,
   error: null,
@@ -87,4 +95,12 @@ export const useAuthStore = create<AuthStore>((set) => ({
   clearError: () => set({ error: null }),
 
   checkAuth: () => set({ isAuthenticated: apiClient.isAuthenticated(), user: loadUser() }),
+
+  setAvatar: (avatarUrl: string | null) => {
+    const atual = get().user;
+    if (!atual) return;
+    const user = { ...atual, avatarUrl };
+    persistUser(user);
+    set({ user });
+  },
 }));
