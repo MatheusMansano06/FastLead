@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import AppHeader from '../../components/app/AppHeader';
 import { apiClient } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
+import CapturaSelfie from '../../components/app/CapturaSelfie';
 
 /**
  * Verificação de identidade do motorista e, quando o tablet é nosso, aceite do
@@ -19,9 +20,6 @@ const ACCENT = '#0a9d6c';
 
 /** Lado maior da foto do documento. Menos que isso e o RG fica ilegível. */
 const DOC_MAX_PX = 1280;
-
-/** Lado do avatar. Mesmo tamanho usado no perfil, para a foto casar lá. */
-const AVATAR_PX = 256;
 
 /**
  * TEXTO DO CONTRATO DE COMODATO — substituir pelo definitivo.
@@ -66,46 +64,6 @@ function fileToDocDataUrl(file) {
         canvas.height = Math.round(img.height * escala);
         canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
         resolve(canvas.toDataURL('image/jpeg', 0.75));
-      };
-      img.onerror = () => reject(new Error('Não consegui ler essa imagem'));
-      img.src = reader.result;
-    };
-    reader.onerror = () => reject(new Error('Não consegui ler esse arquivo'));
-    reader.readAsDataURL(file);
-  });
-}
-
-/**
- * Recorta a selfie num quadrado pequeno para virar a foto de perfil.
- *
- * Mesmo recorte central de `PerfilMotorista` — a foto é exibida em círculo, e
- * reduzir aqui evita carregar a selfie inteira em toda tela que mostra o
- * motorista. É a mesma imagem: ele não tira foto duas vezes.
- */
-function fileToAvatarDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const reader = new FileReader();
-    reader.onload = () => {
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = AVATAR_PX;
-        canvas.height = AVATAR_PX;
-        const lado = Math.min(img.width, img.height);
-        canvas
-          .getContext('2d')
-          .drawImage(
-            img,
-            (img.width - lado) / 2,
-            (img.height - lado) / 2,
-            lado,
-            lado,
-            0,
-            0,
-            AVATAR_PX,
-            AVATAR_PX
-          );
-        resolve(canvas.toDataURL('image/jpeg', 0.72));
       };
       img.onerror = () => reject(new Error('Não consegui ler essa imagem'));
       img.src = reader.result;
@@ -190,6 +148,60 @@ function FotoSlot({ label, hint, facing, value, onChange, disabled }) {
   );
 }
 
+/**
+ * Espaço da selfie. Abre a câmera em vez de um seletor de arquivos.
+ *
+ * Visualmente igual aos slots de documento para a linha não ficar torta, mas
+ * sem `input[type=file]` por baixo: aqui não há caminho para galeria.
+ */
+function SlotSelfie({ value, onAbrir, disabled }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-sm font-medium text-ink/70">Seu rosto</span>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onAbrir}
+        className="relative flex aspect-[4/3] w-full items-center justify-center overflow-hidden rounded-xl border-2 border-dashed transition-colors disabled:opacity-60"
+        style={{
+          borderColor: value ? ACCENT : 'rgba(0,0,0,0.14)',
+          background: value ? '#fff' : 'rgba(0,0,0,0.02)',
+        }}
+      >
+        {value ? (
+          <>
+            <img src={value} alt="Seu rosto" className="h-full w-full object-cover" />
+            <span
+              className="absolute bottom-2 right-2 rounded-full px-2.5 py-1 text-[11px] font-semibold text-white"
+              style={{ background: ACCENT }}
+            >
+              Refazer
+            </span>
+          </>
+        ) : (
+          <span className="flex flex-col items-center gap-1.5 px-4 text-center">
+            <svg
+              width="26"
+              height="26"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={ACCENT}
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+            <span className="text-sm text-ink/45">Abrir câmera</span>
+            <span className="text-[11px] text-ink/35">a foto é tirada na hora</span>
+          </span>
+        )}
+      </button>
+    </div>
+  );
+}
+
 /** Cartão de escolha do caminho: aparelho próprio ou comodato. */
 function OpcaoCaminho({ titulo, descricao, selecionado, onClick }) {
   return (
@@ -236,6 +248,7 @@ export default function AdquirirTablet() {
   const [selfie, setSelfie] = useState('');
   /** Recorte quadrado da mesma selfie, que vira a foto de perfil. */
   const [avatar, setAvatarLocal] = useState('');
+  const [cameraAberta, setCameraAberta] = useState(false);
   const [docFrente, setDocFrente] = useState('');
   const [docVerso, setDocVerso] = useState('');
   const [aceite, setAceite] = useState(false);
@@ -261,8 +274,7 @@ export default function AdquirirTablet() {
   const isComodato = caminho === 'FASTLEAD_LOAN';
 
   // Recusado ou vencido não é fim de linha: o motorista refaz o envio.
-  const podeReenviar =
-    !pedido || pedido.status === 'REJECTED' || pedido.status === 'EXPIRED';
+  const podeReenviar = !pedido || pedido.status === 'REJECTED' || pedido.status === 'EXPIRED';
 
   const formCompleto =
     caminho &&
@@ -333,8 +345,7 @@ export default function AdquirirTablet() {
                   Recebemos seus documentos
                 </h2>
                 <p className="mt-1.5 text-sm text-ink/55">
-                  Estamos conferindo. Assim que liberarmos, o próximo passo aparece
-                  aqui nesta tela.
+                  Estamos conferindo. Assim que liberarmos, o próximo passo aparece aqui nesta tela.
                 </p>
               </Card>
             )}
@@ -403,9 +414,7 @@ export default function AdquirirTablet() {
                   Tablet entregue a você
                 </h2>
                 <p className="mt-1.5 text-sm text-ink/55">
-                  {pedido.device_identifier
-                    ? `Aparelho ${pedido.device_identifier}. `
-                    : ''}
+                  {pedido.device_identifier ? `Aparelho ${pedido.device_identifier}. ` : ''}
                   Pareie no perfil para começar a rodar anúncios.
                 </p>
                 <button
@@ -473,24 +482,19 @@ export default function AdquirirTablet() {
 
                 {caminho && (
                   <Card>
-                    <h2 className="font-grotesk text-lg font-bold text-ink">
-                      Selfie e documento
-                    </h2>
+                    <h2 className="font-grotesk text-lg font-bold text-ink">Selfie e documento</h2>
                     <p className="mt-1 text-sm text-ink/50">
                       Use RG ou CNH. Precisa estar legível e sem reflexo.
                     </p>
 
                     <div className="mt-5 grid gap-4 sm:grid-cols-3">
-                      <FotoSlot
-                        label="Seu rosto"
-                        hint="Tirar selfie"
-                        facing="user"
+                      {/* A selfie não aceita arquivo: sai da câmera, na hora.
+                          Aceitar upload aqui transformaria a verificação em
+                          "mande qualquer imagem de qualquer pessoa". */}
+                      <SlotSelfie
                         value={selfie}
-                        onChange={async (dataUrl, file) => {
-                          setSelfie(dataUrl);
-                          setAvatarLocal(await fileToAvatarDataUrl(file));
-                        }}
                         disabled={enviando}
+                        onAbrir={() => setCameraAberta(true)}
                       />
                       <FotoSlot
                         label="Documento — frente"
@@ -534,8 +538,8 @@ export default function AdquirirTablet() {
                         style={{ accentColor: ACCENT }}
                       />
                       <span className="text-sm text-ink/70">
-                        Li e aceito o contrato de comodato. A assinatura em papel será
-                        feita na entrega.
+                        Li e aceito o contrato de comodato. A assinatura em papel será feita na
+                        entrega.
                       </span>
                     </label>
 
@@ -569,6 +573,15 @@ export default function AdquirirTablet() {
           </div>
         )}
       </main>
+
+      <CapturaSelfie
+        aberto={cameraAberta}
+        aoFechar={() => setCameraAberta(false)}
+        aoUsar={({ foto, avatar: recorte }) => {
+          setSelfie(foto);
+          setAvatarLocal(recorte);
+        }}
+      />
     </div>
   );
 }

@@ -11,14 +11,22 @@ const ACCENT = '#0a9d6c';
 const NAV = ['Início', 'Oportunidades', 'Meus anúncios', 'Minhas jornadas', 'Carteira'];
 
 const brl = (n) =>
-  Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
+  Number(n || 0).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 2,
+  });
 
 function Stat({ icon, label, value, delta }) {
   return (
     <div className="rounded-2xl border border-black/5 bg-white p-5 shadow-[0_20px_50px_-40px_rgba(6,40,29,0.5)]">
       <div className="flex items-center justify-between">
         <span className="text-2xl">{icon}</span>
-        {delta && <span className="text-xs font-semibold" style={{ color: ACCENT }}>{delta}</span>}
+        {delta && (
+          <span className="text-xs font-semibold" style={{ color: ACCENT }}>
+            {delta}
+          </span>
+        )}
       </div>
       <p className="mt-4 font-grotesk text-3xl font-bold text-ink">{value}</p>
       <p className="mt-1 text-sm text-ink/50">{label}</p>
@@ -49,6 +57,12 @@ export default function HomeMotorista() {
    * mandar para o pareamento quem ainda nem enviou documento é beco sem saída.
    */
   const [verificado, setVerificado] = useState(null);
+  /**
+   * Pedido de tablet mais recente. O atalho no topo muda de texto conforme a
+   * etapa — "Adquirir", "Em análise", "Retirar" — em vez de sumir e reaparecer,
+   * que deixaria o motorista sem saber onde acompanhar o que ele já enviou.
+   */
+  const [pedidoTablet, setPedidoTablet] = useState(null);
   const [confirmarRemocao, setConfirmarRemocao] = useState(null);
   const [removendo, setRemovendo] = useState(false);
   const [sessions, setSessions] = useState(null);
@@ -69,10 +83,18 @@ export default function HomeMotorista() {
   }, [isAuthenticated, navigate]);
 
   const loadOps = useCallback(async () => {
-    try { setOps(await apiClient.getOpportunities()); } catch { setOps([]); }
+    try {
+      setOps(await apiClient.getOpportunities());
+    } catch {
+      setOps([]);
+    }
   }, []);
   const loadMine = useCallback(async () => {
-    try { setMine(await apiClient.getDriverCampaigns()); } catch { setMine([]); }
+    try {
+      setMine(await apiClient.getDriverCampaigns());
+    } catch {
+      setMine([]);
+    }
   }, []);
 
   const loadTablets = useCallback(async () => {
@@ -83,27 +105,43 @@ export default function HomeMotorista() {
       setTemTablet(null); // erro de rede não deve virar um aviso falso de "sem tablet"
     }
     try {
-      setVerificado((await apiClient.getMyTabletRequest()).verified);
+      const r = await apiClient.getMyTabletRequest();
+      setVerificado(r.verified);
+      setPedidoTablet(r.request);
     } catch {
       setVerificado(null);
+      setPedidoTablet(null);
     }
   }, []);
 
   const loadSessions = useCallback(async () => {
-    try { setSessions(await apiClient.getDriverSessions()); } catch { setSessions([]); }
+    try {
+      setSessions(await apiClient.getDriverSessions());
+    } catch {
+      setSessions([]);
+    }
   }, []);
 
   const loadCarteira = useCallback(async () => {
-    try { setCarteira(await apiClient.getDriverWallet()); } catch { setCarteira(null); }
+    try {
+      setCarteira(await apiClient.getDriverWallet());
+    } catch {
+      setCarteira(null);
+    }
   }, []);
 
-  useEffect(() => { loadOps(); loadMine(); loadTablets(); loadCarteira(); },
-    [loadOps, loadMine, loadTablets, loadCarteira]);
+  useEffect(() => {
+    loadOps();
+    loadMine();
+    loadTablets();
+    loadCarteira();
+  }, [loadOps, loadMine, loadTablets, loadCarteira]);
 
   // Jornadas só carregam quando a aba é aberta — é a lista mais pesada e a
   // maioria das visitas ao app não passa por ela.
-  useEffect(() => { if (tab === 'Minhas jornadas' && sessions == null) loadSessions(); },
-    [tab, sessions, loadSessions]);
+  useEffect(() => {
+    if (tab === 'Minhas jornadas' && sessions == null) loadSessions();
+  }, [tab, sessions, loadSessions]);
 
   const accept = async (id) => {
     setBusy(id);
@@ -146,6 +184,27 @@ export default function HomeMotorista() {
   const totalLeads = carteira?.leadsConvertidos ?? null;
   const totalScans = mine?.reduce((s, c) => s + Number(c.scans || 0), 0) ?? 0;
 
+  /**
+   * Atalho para a tela do tablet, presente enquanto ele não estiver rodando.
+   *
+   * Fica visível até haver aparelho ATIVO — não some quando o pedido é enviado
+   * nem quando é aprovado, porque é justamente nessas etapas que o motorista
+   * volta ao app para saber em que pé está. Só desaparece quando não há mais
+   * nada a fazer: tablet pareado e no ar.
+   */
+  const atalhoTablet = (() => {
+    if (temTablet === true) return null;
+    const st = pedidoTablet?.status;
+    if (st === 'PENDING') return { texto: 'Tablet em análise', destaque: false };
+    if (st === 'APPROVED' && pedidoTablet.acquisition === 'FASTLEAD_LOAN')
+      return { texto: 'Retirar meu tablet', destaque: true };
+    if (st === 'APPROVED' || st === 'DELIVERED')
+      return { texto: 'Parear meu tablet', destaque: true };
+    if (st === 'REJECTED') return { texto: 'Reenviar documentos', destaque: true };
+    if (st === 'EXPIRED') return { texto: 'Pedir tablet de novo', destaque: true };
+    return { texto: 'Adquirir tablet', destaque: true };
+  })();
+
   return (
     <div className="min-h-screen bg-[#f4f5f7] text-ink">
       <AppHeader accent={ACCENT} badge="Motorista parceiro" nav={NAV} active={tab} onNav={setTab} />
@@ -153,8 +212,10 @@ export default function HomeMotorista() {
       {/* Verde é "deu certo". O aviso de erro vinha verde também, então uma
           recusa da API se parecia com confirmação. */}
       {toast && (
-        <div className="fixed inset-x-0 top-16 z-50 mx-auto max-w-lg w-fit rounded-2xl px-5 py-2.5 text-center text-sm font-semibold text-white shadow-lg"
-          style={{ background: toastErro ? '#B42318' : ACCENT }}>
+        <div
+          className="fixed inset-x-0 top-16 z-50 mx-auto max-w-lg w-fit rounded-2xl px-5 py-2.5 text-center text-sm font-semibold text-white shadow-lg"
+          style={{ background: toastErro ? '#B42318' : ACCENT }}
+        >
           {toast}
         </div>
       )}
@@ -202,7 +263,14 @@ export default function HomeMotorista() {
                 onClick={() => setAvaliacaoCampanha(null)}
                 className="rounded-full p-1.5 text-ink/40 transition hover:bg-black/5 hover:text-ink"
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
                   <path d="M18 6 6 18M6 6l12 12" />
                 </svg>
               </button>
@@ -222,19 +290,38 @@ export default function HomeMotorista() {
         {/* Tab bar (mobile + clareza) */}
         <div className="mb-6 flex gap-2 overflow-x-auto">
           {NAV.map((n) => {
-            const count = n === 'Oportunidades' ? ops?.length : n === 'Meus anúncios' ? mine?.length : null;
+            const count =
+              n === 'Oportunidades' ? ops?.length : n === 'Meus anúncios' ? mine?.length : null;
             return (
-              <button key={n} onClick={() => setTab(n)}
+              <button
+                key={n}
+                onClick={() => setTab(n)}
                 className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition ${tab === n ? 'text-white' : 'bg-white text-ink/60 ring-1 ring-black/5'}`}
-                style={tab === n ? { background: ACCENT } : undefined}>
-                {n}{count != null ? ` · ${count}` : ''}
+                style={tab === n ? { background: ACCENT } : undefined}
+              >
+                {n}
+                {count != null ? ` · ${count}` : ''}
               </button>
             );
           })}
+          {/* Sem tablet no ar, este é o passo que importa — fica em destaque à
+              direita das abas até deixar de haver o que fazer. */}
+          {atalhoTablet && (
+            <button
+              onClick={() => navigate('/app/motorista/tablet')}
+              className={`ml-auto shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition ${
+                atalhoTablet.destaque ? 'text-white' : 'bg-white text-ink/60 ring-1 ring-black/5'
+              }`}
+              style={atalhoTablet.destaque ? { background: ACCENT } : undefined}
+            >
+              {atalhoTablet.texto}
+            </button>
+          )}
+
           {/* Perfil e pareamento do tablet moram fora das abas de campanha. */}
           <button
             onClick={() => navigate('/app/motorista/perfil')}
-            className="ml-auto shrink-0 rounded-full bg-white px-4 py-2 text-sm font-semibold text-ink/60 ring-1 ring-black/5 transition hover:text-ink"
+            className={`${atalhoTablet ? '' : 'ml-auto '}shrink-0 rounded-full bg-white px-4 py-2 text-sm font-semibold text-ink/60 ring-1 ring-black/5 transition hover:text-ink`}
           >
             Perfil e tablet
           </button>
@@ -243,19 +330,38 @@ export default function HomeMotorista() {
         {/* ───────── INÍCIO ───────── */}
         {tab === 'Início' && (
           <>
-            <div className="flex flex-col justify-between gap-5 rounded-3xl p-7 text-white md:flex-row md:items-center md:p-9"
-              style={{ background: 'linear-gradient(140deg,#06281d 0%,#0a9d6c 100%)' }}>
+            <div
+              className="flex flex-col justify-between gap-5 rounded-3xl p-7 text-white md:flex-row md:items-center md:p-9"
+              style={{ background: 'linear-gradient(140deg,#06281d 0%,#0a9d6c 100%)' }}
+            >
               <div>
-                <span className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: '#8ff0cd' }}>Sua central de ganhos</span>
-                <h1 className="mt-2 font-grotesk text-3xl font-bold tracking-tight md:text-4xl">Bom te ver, {firstName} 🚕</h1>
+                <span
+                  className="text-xs font-semibold uppercase tracking-[0.22em]"
+                  style={{ color: '#8ff0cd' }}
+                >
+                  Sua central de ganhos
+                </span>
+                <h1 className="mt-2 font-grotesk text-3xl font-bold tracking-tight md:text-4xl">
+                  Bom te ver, {firstName} 🚕
+                </h1>
                 <p className="mt-2 max-w-lg text-sm text-white/70">
-                  {mine?.length
-                    ? <>Você tem {mine.length} anúncio(s) rodando no seu tablet. Novas empresas aparecem na aba <strong>Oportunidades</strong>.</>
-                    : <>Aceite seu primeiro anúncio para começar a faturar. Veja quem está buscando parceiros na aba <strong>Oportunidades</strong>.</>}
+                  {mine?.length ? (
+                    <>
+                      Você tem {mine.length} anúncio(s) rodando no seu tablet. Novas empresas
+                      aparecem na aba <strong>Oportunidades</strong>.
+                    </>
+                  ) : (
+                    <>
+                      Aceite seu primeiro anúncio para começar a faturar. Veja quem está buscando
+                      parceiros na aba <strong>Oportunidades</strong>.
+                    </>
+                  )}
                 </p>
               </div>
-              <button onClick={() => setTab('Oportunidades')}
-                className="shrink-0 rounded-full bg-white/10 px-6 py-4 text-center ring-1 ring-white/15 transition hover:bg-white/20">
+              <button
+                onClick={() => setTab('Oportunidades')}
+                className="shrink-0 rounded-full bg-white/10 px-6 py-4 text-center ring-1 ring-white/15 transition hover:bg-white/20"
+              >
                 <p className="text-xs uppercase tracking-wide text-white/60">Oportunidades novas</p>
                 <p className="mt-1 font-grotesk text-2xl font-bold">{ops?.length ?? '—'}</p>
                 <p className="text-xs text-white/60">empresas buscando parceiros</p>
@@ -263,8 +369,16 @@ export default function HomeMotorista() {
             </div>
 
             <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-              <Stat icon="💰" label="Ganhos acumulados" value={totalGanhos == null ? '—' : brl(totalGanhos)} />
-              <Stat icon="🎯" label="Leads convertidos" value={totalLeads == null ? '—' : totalLeads} />
+              <Stat
+                icon="💰"
+                label="Ganhos acumulados"
+                value={totalGanhos == null ? '—' : brl(totalGanhos)}
+              />
+              <Stat
+                icon="🎯"
+                label="Leads convertidos"
+                value={totalLeads == null ? '—' : totalLeads}
+              />
               <Stat icon="📱" label="Escaneamentos de QR" value={loading ? '—' : totalScans} />
               <Stat icon="🚗" label="Anúncios rodando" value={loading ? '—' : mine.length} />
             </div>
@@ -273,7 +387,11 @@ export default function HomeMotorista() {
               <div className="flex items-center justify-between gap-3">
                 <h2 className="font-grotesk text-lg font-bold text-ink">Ganhos por anúncio</h2>
                 {!!mine?.length && (
-                  <button onClick={() => setTab('Meus anúncios')} className="text-sm font-semibold" style={{ color: ACCENT }}>
+                  <button
+                    onClick={() => setTab('Meus anúncios')}
+                    className="text-sm font-semibold"
+                    style={{ color: ACCENT }}
+                  >
                     Ver todos
                   </button>
                 )}
@@ -283,7 +401,11 @@ export default function HomeMotorista() {
               ) : mine.length === 0 ? (
                 <p className="mt-4 text-sm text-ink/50">
                   Você ainda não aceitou nenhum anúncio.{' '}
-                  <button onClick={() => setTab('Oportunidades')} className="font-semibold underline" style={{ color: ACCENT }}>
+                  <button
+                    onClick={() => setTab('Oportunidades')}
+                    className="font-semibold underline"
+                    style={{ color: ACCENT }}
+                  >
                     Veja as oportunidades
                   </button>
                   .
@@ -313,8 +435,12 @@ export default function HomeMotorista() {
         {tab === 'Oportunidades' && (
           <div>
             <div className="mb-5">
-              <h1 className="font-grotesk text-2xl font-bold text-ink">Empresas buscando parceiros</h1>
-              <p className="mt-1 text-sm text-ink/55">Escolha quais anúncios você quer rodar no seu tablet. Você ganha por lead gerado.</p>
+              <h1 className="font-grotesk text-2xl font-bold text-ink">
+                Empresas buscando parceiros
+              </h1>
+              <p className="mt-1 text-sm text-ink/55">
+                Escolha quais anúncios você quer rodar no seu tablet. Você ganha por lead gerado.
+              </p>
             </div>
 
             {/* Sem tablet o aceite é recusado no backend — avisar antes evita o
@@ -352,11 +478,14 @@ export default function HomeMotorista() {
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
                 {ops.map((o) => (
-                  <div key={o.id} className="flex flex-col rounded-2xl bg-white p-6 shadow-[0_20px_50px_-40px_rgba(6,40,29,0.5)]"
+                  <div
+                    key={o.id}
+                    className="flex flex-col rounded-2xl bg-white p-6 shadow-[0_20px_50px_-40px_rgba(6,40,29,0.5)]"
                     style={{
                       borderWidth: '2px',
                       borderColor: o.participated ? '#FCD34D' : '#00000010',
-                    }}>
+                    }}
+                  >
                     {o.participated && (
                       <div className="mb-3 inline-flex w-fit rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900">
                         ⭐ Já participou
@@ -364,18 +493,32 @@ export default function HomeMotorista() {
                     )}
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: ACCENT }}>{o.company}</span>
+                        <span
+                          className="text-xs font-semibold uppercase tracking-wide"
+                          style={{ color: ACCENT }}
+                        >
+                          {o.company}
+                        </span>
                         <h3 className="mt-1 font-grotesk text-lg font-bold text-ink">{o.title}</h3>
                       </div>
-                      <span className="rounded-full px-3 py-1 text-sm font-bold text-white" style={{ background: ACCENT }}>
+                      <span
+                        className="rounded-full px-3 py-1 text-sm font-bold text-white"
+                        style={{ background: ACCENT }}
+                      >
                         R$ {o.pricePerLead}/lead
                       </span>
                     </div>
                     {o.description && <p className="mt-2 text-sm text-ink/60">{o.description}</p>}
                     <div className="mt-4 flex flex-wrap gap-2 text-xs text-ink/60">
-                      {o.industry && <span className="rounded-full bg-black/5 px-2.5 py-1">{o.industry}</span>}
-                      <span className="rounded-full bg-black/5 px-2.5 py-1">{o.remaining} vaga(s) restante(s)</span>
-                      <span className="rounded-full bg-black/5 px-2.5 py-1">{o.acceptedCount} já rodando</span>
+                      {o.industry && (
+                        <span className="rounded-full bg-black/5 px-2.5 py-1">{o.industry}</span>
+                      )}
+                      <span className="rounded-full bg-black/5 px-2.5 py-1">
+                        {o.remaining} vaga(s) restante(s)
+                      </span>
+                      <span className="rounded-full bg-black/5 px-2.5 py-1">
+                        {o.acceptedCount} já rodando
+                      </span>
                     </div>
                     <button
                       onClick={() => {
@@ -390,11 +533,18 @@ export default function HomeMotorista() {
                       }}
                       disabled={busy === o.id}
                       className="mt-5 rounded-full py-3 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
-                      style={{ background: ACCENT, boxShadow: '0 16px 40px -14px rgba(10,157,108,0.7)' }}>
-                      {busy === o.id ? 'Aceitando…'
-                        : o.participated ? '⭐ Avaliar'
-                        : temTablet === false ? 'Parear tablet para rodar'
-                        : 'Rodar este anúncio'}
+                      style={{
+                        background: ACCENT,
+                        boxShadow: '0 16px 40px -14px rgba(10,157,108,0.7)',
+                      }}
+                    >
+                      {busy === o.id
+                        ? 'Aceitando…'
+                        : o.participated
+                          ? '⭐ Avaliar'
+                          : temTablet === false
+                            ? 'Parear tablet para rodar'
+                            : 'Rodar este anúncio'}
                     </button>
                   </div>
                 ))}
@@ -407,28 +557,62 @@ export default function HomeMotorista() {
         {tab === 'Meus anúncios' && (
           <div>
             <div className="mb-5">
-              <h1 className="font-grotesk text-2xl font-bold text-ink">Anúncios rodando no seu tablet</h1>
-              <p className="mt-1 text-sm text-ink/55">Os anúncios que você aceitou e estão sendo exibidos nas suas corridas.</p>
+              <h1 className="font-grotesk text-2xl font-bold text-ink">
+                Anúncios rodando no seu tablet
+              </h1>
+              <p className="mt-1 text-sm text-ink/55">
+                Os anúncios que você aceitou e estão sendo exibidos nas suas corridas.
+              </p>
             </div>
             {mine == null ? (
               <Empty>Carregando…</Empty>
             ) : mine.length === 0 ? (
-              <Empty>Você ainda não está rodando nenhum anúncio. Veja as <button onClick={() => setTab('Oportunidades')} className="font-semibold underline" style={{ color: ACCENT }}>oportunidades</button>.</Empty>
+              <Empty>
+                Você ainda não está rodando nenhum anúncio. Veja as{' '}
+                <button
+                  onClick={() => setTab('Oportunidades')}
+                  className="font-semibold underline"
+                  style={{ color: ACCENT }}
+                >
+                  oportunidades
+                </button>
+                .
+              </Empty>
             ) : (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {mine.map((c) => (
                   <div key={c.id} className="rounded-2xl border border-black/5 bg-white p-6">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: ACCENT }}>{c.company || 'Anúncio'}</span>
-                      <span className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: ACCENT }}>
-                        <span className="h-2 w-2 rounded-full" style={{ background: ACCENT }} /> Ativo
+                      <span
+                        className="text-xs font-semibold uppercase tracking-wide"
+                        style={{ color: ACCENT }}
+                      >
+                        {c.company || 'Anúncio'}
+                      </span>
+                      <span
+                        className="flex items-center gap-1.5 text-xs font-semibold"
+                        style={{ color: ACCENT }}
+                      >
+                        <span className="h-2 w-2 rounded-full" style={{ background: ACCENT }} />{' '}
+                        Ativo
                       </span>
                     </div>
                     <h3 className="mt-1 font-grotesk text-lg font-bold text-ink">{c.title}</h3>
                     <dl className="mt-4 space-y-2 text-sm">
-                      <div className="flex justify-between"><dt className="text-ink/50">Por lead</dt><dd className="font-semibold text-ink">R$ {c.pricePerLead}</dd></div>
-                      <div className="flex justify-between"><dt className="text-ink/50">Leads gerados</dt><dd className="font-semibold text-ink">{c.leads}</dd></div>
-                      <div className="flex justify-between"><dt className="text-ink/50">Ganhos</dt><dd className="font-semibold" style={{ color: ACCENT }}>R$ {c.earnings}</dd></div>
+                      <div className="flex justify-between">
+                        <dt className="text-ink/50">Por lead</dt>
+                        <dd className="font-semibold text-ink">R$ {c.pricePerLead}</dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt className="text-ink/50">Leads gerados</dt>
+                        <dd className="font-semibold text-ink">{c.leads}</dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt className="text-ink/50">Ganhos</dt>
+                        <dd className="font-semibold" style={{ color: ACCENT }}>
+                          R$ {c.earnings}
+                        </dd>
+                      </div>
                     </dl>
 
                     {/* O tablet é do motorista: ele pode recusar qualquer
@@ -452,8 +636,8 @@ export default function HomeMotorista() {
             <div className="mb-5">
               <h1 className="font-grotesk text-2xl font-bold text-ink">Suas jornadas</h1>
               <p className="mt-1 text-sm text-ink/55">
-                Cada vez que você encerra o tablet, o período vira uma jornada com o que rendeu.
-                Dá para encerrar mais de uma vez no mesmo dia.
+                Cada vez que você encerra o tablet, o período vira uma jornada com o que rendeu. Dá
+                para encerrar mais de uma vez no mesmo dia.
               </p>
             </div>
             {sessions == null ? (
