@@ -6,6 +6,8 @@ import { apiClient } from '../../services/api';
 import CarteiraMotorista from '../../components/app/CarteiraMotorista';
 import ModalPareamento from '../../components/app/ModalPareamento';
 import AvaliacaoCampanha from '../../components/app/AvaliacaoCampanha';
+import GraficoGanhos from '../../components/app/GraficoGanhos';
+import ProgressoDoDia from '../../components/app/ProgressoDoDia';
 
 const ACCENT = '#0a9d6c';
 const NAV = ['Início', 'Oportunidades', 'Meus anúncios', 'Minhas jornadas', 'Carteira'];
@@ -110,6 +112,8 @@ export default function HomeMotorista() {
   const [removendo, setRemovendo] = useState(false);
   const [sessions, setSessions] = useState(null);
   const [carteira, setCarteira] = useState(null);
+  const [lancamentos, setLancamentos] = useState(null);
+  const [capacidade, setCapacidade] = useState(null);
   const [toastErro, setToastErro] = useState(false);
   const [mostrarPareamento, setMostrarPareamento] = useState(false);
   /**
@@ -170,6 +174,17 @@ export default function HomeMotorista() {
       setCarteira(await apiClient.getDriverWallet());
     } catch {
       setCarteira(null);
+    }
+    // 100 lançamentos cobrem com folga os 30 dias que a curva desenha.
+    try {
+      setLancamentos(await apiClient.getDriverEarnings(100));
+    } catch {
+      setLancamentos([]);
+    }
+    try {
+      setCapacidade(await apiClient.getDriverCapacity());
+    } catch {
+      setCapacidade(null);
     }
   }, []);
 
@@ -456,6 +471,34 @@ export default function HomeMotorista() {
                 value={loading ? '—' : mine.length}
                 hint="no seu tablet agora"
               />
+            </div>
+
+            {/* Dois painéis lado a lado: um olha para trás (o que já entrou)
+                e o outro para hoje (quanto da tela ainda está livre). */}
+            <div className="mt-6 grid gap-4 lg:grid-cols-3">
+              <section className="rounded-2xl border border-black/[0.07] bg-white p-6 lg:col-span-2">
+                <h2 className="font-grotesk text-lg font-bold text-ink">Seus ganhos por dia</h2>
+                <p className="mt-1 text-sm text-ink/50">
+                  Passe o dedo sobre a linha para ver o valor de cada dia.
+                </p>
+                <div className="mt-4">
+                  <GraficoGanhos lancamentos={lancamentos} carregando={lancamentos == null} />
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-black/[0.07] bg-white p-6">
+                <h2 className="font-grotesk text-lg font-bold text-ink">Seu dia de tela</h2>
+                <p className="mt-1 text-sm text-ink/50">
+                  Quanto já está comprometido com anúncios.
+                </p>
+                <div className="mt-4">
+                  <ProgressoDoDia
+                    capacidade={capacidade}
+                    carregando={capacidade == null}
+                    aoVerOportunidades={() => setTab('Oportunidades')}
+                  />
+                </div>
+              </section>
             </div>
 
             <div className="mt-6 rounded-2xl border border-black/5 bg-white p-6">

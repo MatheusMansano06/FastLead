@@ -4,12 +4,7 @@ import { AuthResponse, LoginPayload, RegisterPayload, ApiError } from '../types'
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 export type TabletAcquisition = 'OWN_DEVICE' | 'FASTLEAD_LOAN';
-export type TabletRequestStatus =
-  | 'PENDING'
-  | 'APPROVED'
-  | 'REJECTED'
-  | 'DELIVERED'
-  | 'EXPIRED';
+export type TabletRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'DELIVERED' | 'EXPIRED';
 
 /**
  * Solicitação de tablet como ela volta da API. As fotos de documento só vêm no
@@ -516,6 +511,25 @@ class ApiClient {
    */
   async get(url: string, config?: Record<string, unknown>) {
     return this.client.get(url, config);
+  }
+
+  /**
+   * Quanto do dia de tela já está vendido e para quem.
+   *
+   * O tablet tem um teto diário de minutos, e cada campanha ocupa uma fatia
+   * fixa dele — é o que diz ao motorista quanto ainda dá para aceitar.
+   */
+  async getDriverCapacity() {
+    const r = await this.client.get('/driver/capacity');
+    return r.data.data as {
+      capMinutes: number;
+      committedMinutes: number;
+      availableMinutes: number;
+      capLabel: string;
+      committedLabel: string;
+      availableLabel: string;
+      campaigns: { campaignId: string; title: string; dailyMinutes: number }[];
+    };
   }
 
   // ===== Verificação de identidade e comodato do tablet =====
