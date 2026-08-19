@@ -17,19 +17,62 @@ const brl = (n) =>
     minimumFractionDigits: 2,
   });
 
-function Stat({ icon, label, value, delta }) {
+/**
+ * Ícones de traço no lugar dos emojis que havia antes.
+ *
+ * Emoji muda de desenho a cada sistema operacional e carrega um tom infantil
+ * que não combina com uma tela onde a pessoa confere quanto ganhou.
+ */
+const ICONES = {
+  ganhos: 'M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6',
+  leads: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z',
+  scans:
+    'M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M7 12h10',
+  anuncios: 'M5 3h14a1 1 0 011 1v16a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1zM11 18h2',
+  seta: 'M5 12h14M13 6l6 6-6 6',
+};
+
+function Icone({ nome, tamanho = 18, cor = 'currentColor' }) {
   return (
-    <div className="rounded-2xl border border-black/5 bg-white p-5 shadow-[0_20px_50px_-40px_rgba(6,40,29,0.5)]">
-      <div className="flex items-center justify-between">
-        <span className="text-2xl">{icon}</span>
-        {delta && (
-          <span className="text-xs font-semibold" style={{ color: ACCENT }}>
-            {delta}
-          </span>
-        )}
+    <svg
+      width={tamanho}
+      height={tamanho}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={cor}
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d={ICONES[nome]} />
+    </svg>
+  );
+}
+
+/**
+ * Cartão de número do topo.
+ *
+ * O valor vem primeiro e grande porque é o que a pessoa abriu o app para ver;
+ * o rótulo explica logo abaixo. O ícone fica discreto, marcando a categoria
+ * sem disputar atenção com o número.
+ */
+function Stat({ icone, label, value, hint }) {
+  return (
+    <div className="rounded-2xl border border-black/[0.07] bg-white p-5">
+      <div className="flex items-center gap-2">
+        <span
+          className="flex h-7 w-7 items-center justify-center rounded-lg"
+          style={{ background: `${ACCENT}12`, color: ACCENT }}
+        >
+          <Icone nome={icone} tamanho={15} />
+        </span>
+        <p className="text-[13px] font-medium text-ink/55">{label}</p>
       </div>
-      <p className="mt-4 font-grotesk text-3xl font-bold text-ink">{value}</p>
-      <p className="mt-1 text-sm text-ink/50">{label}</p>
+      <p className="mt-3 font-grotesk text-[28px] font-bold leading-none tracking-tight text-ink">
+        {value}
+      </p>
+      {hint && <p className="mt-1.5 text-xs text-ink/40">{hint}</p>}
     </div>
   );
 }
@@ -287,100 +330,132 @@ export default function HomeMotorista() {
       )}
 
       <main className="mx-auto max-w-7xl px-5 py-8 md:px-8">
-        {/* Tab bar (mobile + clareza) */}
-        <div className="mb-6 flex gap-2 overflow-x-auto">
-          {NAV.map((n) => {
-            const count =
-              n === 'Oportunidades' ? ops?.length : n === 'Meus anúncios' ? mine?.length : null;
-            return (
-              <button
-                key={n}
-                onClick={() => setTab(n)}
-                className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition ${tab === n ? 'text-white' : 'bg-white text-ink/60 ring-1 ring-black/5'}`}
-                style={tab === n ? { background: ACCENT } : undefined}
-              >
-                {n}
-                {count != null ? ` · ${count}` : ''}
-              </button>
-            );
-          })}
-          {/* Sem tablet no ar, este é o passo que importa — fica em destaque à
-              direita das abas até deixar de haver o que fazer. */}
-          {atalhoTablet && (
-            <button
-              onClick={() => navigate('/app/motorista/tablet')}
-              className={`ml-auto shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition ${
-                atalhoTablet.destaque ? 'text-white' : 'bg-white text-ink/60 ring-1 ring-black/5'
-              }`}
-              style={atalhoTablet.destaque ? { background: ACCENT } : undefined}
-            >
-              {atalhoTablet.texto}
-            </button>
-          )}
+        {/*
+          Uma navegação só por tamanho de tela.
 
-          {/* Perfil e pareamento do tablet moram fora das abas de campanha. */}
-          <button
-            onClick={() => navigate('/app/motorista/perfil')}
-            className={`${atalhoTablet ? '' : 'ml-auto '}shrink-0 rounded-full bg-white px-4 py-2 text-sm font-semibold text-ink/60 ring-1 ring-black/5 transition hover:text-ink`}
-          >
-            Perfil e tablet
-          </button>
+          Antes as mesmas cinco seções apareciam no cabeçalho E nestas pílulas
+          ao mesmo tempo no desktop — duas barras idênticas, uma embaixo da
+          outra, e nenhuma pista de qual era a de verdade. As pílulas ficam só
+          no celular, onde o cabeçalho esconde a navegação; os atalhos de
+          tablet e perfil continuam visíveis sempre, porque não estão no
+          cabeçalho em tamanho nenhum.
+        */}
+        <div className="mb-6 flex flex-col gap-2 md:flex-row md:items-center">
+          {/* Rolagem horizontal só nas abas. Se ela envolvesse a linha
+              inteira, os atalhos de tablet e perfil sairiam da tela no
+              celular — justamente os dois botões que precisam estar à
+              mão para quem ainda não pôs o tablet para rodar. */}
+          <div className="-mx-5 flex gap-2 overflow-x-auto px-5 md:hidden">
+            {NAV.map((n) => {
+              const count =
+                n === 'Oportunidades' ? ops?.length : n === 'Meus anúncios' ? mine?.length : null;
+              return (
+                <button
+                  key={n}
+                  onClick={() => setTab(n)}
+                  className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                    tab === n ? 'text-white' : 'bg-white text-ink/60 ring-1 ring-black/[0.07]'
+                  }`}
+                  style={tab === n ? { background: ACCENT } : undefined}
+                >
+                  {n}
+                  {count != null ? ` · ${count}` : ''}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Sem tablet no ar, este é o passo que importa — fica em destaque
+              até deixar de haver o que fazer. */}
+          <div className="flex gap-2 md:ml-auto">
+            {atalhoTablet && (
+              <button
+                onClick={() => navigate('/app/motorista/tablet')}
+                className={`flex-1 shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors md:flex-none ${
+                  atalhoTablet.destaque
+                    ? 'text-white'
+                    : 'bg-white text-ink/60 ring-1 ring-black/[0.07]'
+                }`}
+                style={atalhoTablet.destaque ? { background: ACCENT } : undefined}
+              >
+                {atalhoTablet.texto}
+              </button>
+            )}
+
+            <button
+              onClick={() => navigate('/app/motorista/perfil')}
+              className="flex-1 shrink-0 rounded-full bg-white px-4 py-2 text-sm font-medium text-ink/60 ring-1 ring-black/[0.07] transition-colors hover:text-ink md:flex-none"
+            >
+              Perfil e tablet
+            </button>
+          </div>
         </div>
 
         {/* ───────── INÍCIO ───────── */}
         {tab === 'Início' && (
           <>
-            <div
-              className="flex flex-col justify-between gap-5 rounded-3xl p-7 text-white md:flex-row md:items-center md:p-9"
-              style={{ background: 'linear-gradient(140deg,#06281d 0%,#0a9d6c 100%)' }}
-            >
+            {/* O bloco verde de antes ocupava um terço da tela para dizer
+                "olá" — espaço que agora vai para os números. Aqui a saudação
+                divide a linha com a única ação que importa nesta tela. */}
+            <div className="flex flex-col gap-4 rounded-2xl border border-black/[0.07] bg-white p-6 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <span
-                  className="text-xs font-semibold uppercase tracking-[0.22em]"
-                  style={{ color: '#8ff0cd' }}
-                >
-                  Sua central de ganhos
-                </span>
-                <h1 className="mt-2 font-grotesk text-3xl font-bold tracking-tight md:text-4xl">
-                  Bom te ver, {firstName} 🚕
+                <h1 className="font-grotesk text-2xl font-bold tracking-tight text-ink">
+                  Olá, {firstName}
                 </h1>
-                <p className="mt-2 max-w-lg text-sm text-white/70">
-                  {mine?.length ? (
-                    <>
-                      Você tem {mine.length} anúncio(s) rodando no seu tablet. Novas empresas
-                      aparecem na aba <strong>Oportunidades</strong>.
-                    </>
-                  ) : (
-                    <>
-                      Aceite seu primeiro anúncio para começar a faturar. Veja quem está buscando
-                      parceiros na aba <strong>Oportunidades</strong>.
-                    </>
-                  )}
+                <p className="mt-1 text-sm text-ink/55">
+                  {mine?.length
+                    ? `Você tem ${mine.length} anúncio${mine.length > 1 ? 's' : ''} rodando no seu tablet.`
+                    : 'Você ainda não está rodando nenhum anúncio.'}
                 </p>
               </div>
+
               <button
                 onClick={() => setTab('Oportunidades')}
-                className="shrink-0 rounded-full bg-white/10 px-6 py-4 text-center ring-1 ring-white/15 transition hover:bg-white/20"
+                className="flex items-center justify-between gap-4 rounded-xl border px-4 py-3 text-left transition-colors sm:justify-start"
+                style={{ borderColor: `${ACCENT}33`, background: `${ACCENT}0a` }}
               >
-                <p className="text-xs uppercase tracking-wide text-white/60">Oportunidades novas</p>
-                <p className="mt-1 font-grotesk text-2xl font-bold">{ops?.length ?? '—'}</p>
-                <p className="text-xs text-white/60">empresas buscando parceiros</p>
+                <span>
+                  <span className="block text-xs font-medium text-ink/50">
+                    Empresas buscando parceiros
+                  </span>
+                  <span
+                    className="font-grotesk block text-xl font-bold leading-tight"
+                    style={{ color: ACCENT }}
+                  >
+                    {ops == null ? '—' : ops.length}
+                  </span>
+                </span>
+                <span style={{ color: ACCENT }}>
+                  <Icone nome="seta" tamanho={18} />
+                </span>
               </button>
             </div>
 
             <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
               <Stat
-                icon="💰"
+                icone="ganhos"
                 label="Ganhos acumulados"
                 value={totalGanhos == null ? '—' : brl(totalGanhos)}
+                hint="já creditado na sua carteira"
               />
               <Stat
-                icon="🎯"
+                icone="leads"
                 label="Leads convertidos"
                 value={totalLeads == null ? '—' : totalLeads}
+                hint="clientes que a empresa fechou"
               />
-              <Stat icon="📱" label="Escaneamentos de QR" value={loading ? '—' : totalScans} />
-              <Stat icon="🚗" label="Anúncios rodando" value={loading ? '—' : mine.length} />
+              <Stat
+                icone="scans"
+                label="Escaneamentos de QR"
+                value={loading ? '—' : totalScans}
+                hint="passageiros que leram a tela"
+              />
+              <Stat
+                icone="anuncios"
+                label="Anúncios rodando"
+                value={loading ? '—' : mine.length}
+                hint="no seu tablet agora"
+              />
             </div>
 
             <div className="mt-6 rounded-2xl border border-black/5 bg-white p-6">
@@ -474,7 +549,7 @@ export default function HomeMotorista() {
             {ops == null ? (
               <Empty>Carregando oportunidades…</Empty>
             ) : ops.length === 0 ? (
-              <Empty>Nenhuma oportunidade nova no momento. Volte em breve! 🚀</Empty>
+              <Empty>Nenhuma oportunidade nova no momento. Novas empresas aparecem aqui.</Empty>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
                 {ops.map((o) => (
