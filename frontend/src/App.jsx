@@ -28,6 +28,7 @@ const CadastroMotorista = lazy(() => import('./pages/auth/CadastroMotorista'));
 const HomeEmpresa = lazy(() => import('./pages/app/HomeEmpresa'));
 const HomeMotorista = lazy(() => import('./pages/app/HomeMotorista'));
 const PerfilMotorista = lazy(() => import('./pages/app/PerfilMotorista'));
+const AdquirirTablet = lazy(() => import('./pages/app/AdquirirTablet'));
 
 // MASTER (visão global de todas as empresas e motoristas)
 const Master = lazy(() => import('./pages/Master'));
@@ -38,6 +39,7 @@ const AdminCompanies = lazy(() => import('./pages/admin/AdminCompanies'));
 const AdminCompanyDetail = lazy(() => import('./pages/admin/AdminCompanyDetail'));
 const AdminDrivers = lazy(() => import('./pages/admin/AdminDrivers'));
 const AdminDriverDetail = lazy(() => import('./pages/admin/AdminDriverDetail'));
+const AdminTabletRequests = lazy(() => import('./pages/admin/AdminTabletRequests'));
 
 // Páginas antigas do anunciante
 const CreateCampaign = lazy(() => import('./pages/CreateCampaign'));
@@ -100,6 +102,7 @@ const App = () => {
         <Route path="/app/empresa" element={<ProtectedRoute><HomeEmpresa /></ProtectedRoute>} />
         <Route path="/app/motorista" element={<ProtectedRoute><HomeMotorista /></ProtectedRoute>} />
         <Route path="/app/motorista/perfil" element={<ProtectedRoute><PerfilMotorista /></ProtectedRoute>} />
+        <Route path="/app/motorista/tablet" element={<ProtectedRoute><AdquirirTablet /></ProtectedRoute>} />
 
         {/* Painel MASTER */}
         <Route path="/master" element={<MasterRoute><Master /></MasterRoute>} />
@@ -110,6 +113,7 @@ const App = () => {
         <Route path="/admin/companies/:id" element={<MasterRoute><AdminCompanyDetail /></MasterRoute>} />
         <Route path="/admin/drivers" element={<MasterRoute><AdminDrivers /></MasterRoute>} />
         <Route path="/admin/drivers/:id" element={<MasterRoute><AdminDriverDetail /></MasterRoute>} />
+        <Route path="/admin/tablet-requests" element={<MasterRoute><AdminTabletRequests /></MasterRoute>} />
 
         {/* Advertiser sub-pages */}
         <Route path="/create-campaign" element={<ProtectedRoute><CreateCampaign /></ProtectedRoute>} />

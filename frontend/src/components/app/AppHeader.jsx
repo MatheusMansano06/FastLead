@@ -49,10 +49,21 @@ export default function AppHeader({ accent = '#2563FF', badge = 'Anunciante', na
             <p className="text-sm font-semibold leading-tight text-ink">{name}</p>
             <p className="text-xs leading-tight text-ink/45">{user?.email}</p>
           </div>
-          <span className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold text-white"
-            style={{ background: accent }}>
-            {initials || '·'}
-          </span>
+          {/* A foto entra no lugar das iniciais assim que existe uma. Elas
+              seguem como reserva: conta recém-criada ainda não tem foto. */}
+          {user?.avatarUrl ? (
+            <img
+              src={user.avatarUrl}
+              alt={name}
+              className="h-9 w-9 rounded-full object-cover"
+              style={{ boxShadow: `0 0 0 2px ${accent}33` }}
+            />
+          ) : (
+            <span className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold text-white"
+              style={{ background: accent }}>
+              {initials || '·'}
+            </span>
+          )}
           <button onClick={doLogout} title="Sair"
             className="rounded-full border border-black/10 p-2 text-ink/50 transition hover:bg-black/5 hover:text-ink">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

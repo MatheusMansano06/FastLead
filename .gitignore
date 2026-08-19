@@ -41,3 +41,8 @@ temp/
 
 # Worktrees criados pelo Claude Code — checkouts inteiros, centenas de MB
 .claude/worktrees/
+
+# Estado local do rtk que caiu aqui por engano: em algum momento o $HOME foi
+# resolvido para o nome de um bundle, e a ferramenta gravou seu histórico de
+# comandos dentro do repositório. É estado de ferramenta, nunca código.
+HomeMotorista-*.js/

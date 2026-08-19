@@ -72,7 +72,10 @@ export default function CadastroMotorista() {
         vehicle: form.vehicle.trim(),
         plate: form.plate.toUpperCase(),
       });
-      navigate(homePathFor(u.type));
+      // Cadastro criado é só o e-mail; o que libera o tablet é a verificação
+      // de identidade. Mandar para a home aqui deixaria o motorista batendo
+      // numa recusa do backend ao tentar parear, sem saber o que faltou.
+      navigate('/app/motorista/tablet');
     } catch {
       /* erro via store */
     }

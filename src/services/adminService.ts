@@ -551,7 +551,14 @@ export class AdminService {
       }),
       prisma.campaign.findMany({
         where: { anunciante_id: companyId, deleted_at: null },
-        select: { id: true, title: true, status: true, start_date: true, end_date: true, total_investment: true },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          start_date: true,
+          end_date: true,
+          total_investment: true,
+        },
       }),
       prisma.companyCreditTx.findMany({
         where: { company_id: companyId },
@@ -591,7 +598,8 @@ export class AdminService {
         campaigns: campaigns.length,
         leads: leads.length,
         conversions: converted,
-        conversionRate: leads.length > 0 ? Number(((converted / leads.length) * 100).toFixed(2)) : 0,
+        conversionRate:
+          leads.length > 0 ? Number(((converted / leads.length) * 100).toFixed(2)) : 0,
       },
       campaigns: campaigns.map((c) => ({
         id: c.id,
@@ -613,7 +621,12 @@ export class AdminService {
   }
 
   /** Leads de uma empresa específica. */
-  static async companyLeads(companyId: string, page = 1, limit = 50, filters?: { status?: string }) {
+  static async companyLeads(
+    companyId: string,
+    page = 1,
+    limit = 50,
+    filters?: { status?: string }
+  ) {
     const where: any = { company_id: companyId, deleted_at: null };
     if (filters?.status) where.status = filters.status;
 
@@ -691,7 +704,9 @@ export class AdminService {
 
     if (!company) throw new NotFoundError('Empresa não encontrada');
 
-    const paidEarnings = earnings.filter((e) => e.status === 'PAID').reduce((sum, e) => sum + Number(e.amount), 0);
+    const paidEarnings = earnings
+      .filter((e) => e.status === 'PAID')
+      .reduce((sum, e) => sum + Number(e.amount), 0);
     const pendingEarnings = earnings
       .filter((e) => e.status === 'PENDING')
       .reduce((sum, e) => sum + Number(e.amount), 0);
@@ -752,8 +767,12 @@ export class AdminService {
           },
         },
       }),
+      // DriverEarning nao tem exclusao logica; o filtro invalido derrubava a
+      // tela inteira com erro do Prisma. Ganho cancelado sai da conta porque
+      // este total e somado sem separar por status — mesmo criterio de
+      // ReportService.driverWorkSummary.
       prisma.driverEarning.findMany({
-        where: { motorista_id: motoristaId, deleted_at: null },
+        where: { motorista_id: motoristaId, status: { not: 'CANCELLED' } },
         select: { status: true, amount: true },
       }),
       prisma.tabletSession.findMany({
@@ -801,8 +820,13 @@ export class AdminService {
   }
 
   /** Earnings de um motorista (por período/status). */
-  static async driverEarnings(motoristaId: string, page = 1, limit = 50, filters?: { status?: string }) {
-    const where: any = { motorista_id: motoristaId, deleted_at: null };
+  static async driverEarnings(
+    motoristaId: string,
+    page = 1,
+    limit = 50,
+    filters?: { status?: string }
+  ) {
+    const where: any = { motorista_id: motoristaId };
     if (filters?.status) where.status = filters.status;
 
     const [total, earnings] = await prisma.$transaction([
@@ -818,7 +842,13 @@ export class AdminService {
           amount: true,
           commission_rate: true,
           created_at: true,
-          lead: { select: { contact_name: true, campaign_id: true, campaign: { select: { title: true } } } },
+          lead: {
+            select: {
+              contact_name: true,
+              campaign_id: true,
+              campaign: { select: { title: true } },
+            },
+          },
         },
       }),
     ]);
@@ -894,7 +924,7 @@ export class AdminService {
         select: { status: true },
       }),
       prisma.driverEarning.findMany({
-        where: { motorista_id: motoristaId, deleted_at: null },
+        where: { motorista_id: motoristaId },
         select: { amount: true, status: true },
       }),
       prisma.scanEvent.findMany({
@@ -925,10 +955,14 @@ export class AdminService {
         sessionsCount: sessions.length,
         leadsGenerated: leads.length,
         leadsConverted: converted,
-        conversionRate: leads.length > 0 ? Number(((converted / leads.length) * 100).toFixed(2)) : 0,
+        conversionRate:
+          leads.length > 0 ? Number(((converted / leads.length) * 100).toFixed(2)) : 0,
         scans: scans.length,
         uniqueScans,
-        avgEarningPerLead: leads.length > 0 ? Number((Number(motorista.total_earnings) / leads.length).toFixed(2)) : 0,
+        avgEarningPerLead:
+          leads.length > 0
+            ? Number((Number(motorista.total_earnings) / leads.length).toFixed(2))
+            : 0,
       },
     };
   }
@@ -946,8 +980,11 @@ export class AdminService {
           id: true,
           amount: true,
           status: true,
-          payout_method: true,
-          reference_id: true,
+          // Os nomes anteriores (payout_method / reference_id) nunca existiram
+          // em Payment, e o Prisma derrubava a consulta inteira.
+          payment_type: true,
+          external_id: true,
+          paid_at: true,
           created_at: true,
           updated_at: true,
         },
@@ -962,8 +999,9 @@ export class AdminService {
         id: p.id,
         amount: Number(p.amount),
         status: p.status,
-        method: p.payout_method,
-        reference: p.reference_id,
+        method: p.payment_type,
+        reference: p.external_id,
+        paidAt: p.paid_at,
         createdAt: p.created_at,
         updatedAt: p.updated_at,
       })),

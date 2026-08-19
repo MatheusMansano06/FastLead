@@ -48,6 +48,9 @@ export interface AuthResponse {
     email: string;
     type: UserType;
     companyId?: string;
+    name?: string;
+    /** Foto de perfil como data-URL. O cabeçalho cai nas iniciais sem ela. */
+    avatarUrl?: string | null;
   };
 }
 
