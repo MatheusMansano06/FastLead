@@ -1,0 +1,20 @@
+{
+  "$schema": "https://raw.githubusercontent.com/vercel/serve-handler/master/src/schema.js",
+  "headers": [
+    {
+      "//": "O HTML NUNCA pode ser cacheado. Sem isto o Railway responde sem cache-control, o navegador aplica cache heurístico e prende o visitante num index.html velho — que aponta para chunks com hash que não existem mais. Como `serve -s` faz fallback de SPA, esses chunks voltam como text/html no lugar de JS e a página quebra.",
+      "source": "**/*.html",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, must-revalidate" }]
+    },
+    {
+      "//": "Assets têm hash no nome: build novo gera nome novo, então cachear para sempre é seguro e evita rebaixar quem já tem.",
+      "source": "assets/**",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    },
+    {
+      "//": "Service worker e manifest precisam ser revalidados, senão o tablet fica preso numa versão antiga do SW e nunca troca de cache.",
+      "source": "*(sw.js|manifest.webmanifest)",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, must-revalidate" }]
+    }
+  ]
+}
