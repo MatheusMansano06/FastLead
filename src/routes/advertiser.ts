@@ -429,12 +429,13 @@ router.get(
  * PATCH /advertiser/leads/:leadId/convert
  * O anunciante confirma que o lead virou negócio.
  *
- * É o gatilho do dinheiro: debita a comissão do saldo da empresa e credita o
- * motorista, atomicamente. Antes daqui não existia nenhuma rota que convertesse
- * um lead, então `debitLeadConversion` nunca era chamada e nada se movia.
+ * NÃO move dinheiro. O motorista é pago por TEMPO DE TELA (ver
+ * `creditService.creditScreenTime`, chamado no sync de impressões), e o pacote
+ * já foi cobrado da empresa. Debitar de novo aqui pagaria o motorista duas
+ * vezes pela mesma exibição.
  *
- * O `conversion_value` é o valor do negócio fechado; a comissão do motorista
- * sai dele. Sem valor, não há o que repartir.
+ * O que esta rota faz é fechar o funil ISL: marca o lead como convertido e
+ * registra o valor do negócio, que alimenta a taxa de conversão dos painéis.
  */
 router.patch(
   '/leads/:leadId/convert',
@@ -465,10 +466,8 @@ router.patch(
       return;
     }
 
-    // Lead reprovado pelo antifraude. A checagem também existe dentro de
-    // debitLeadConversion, que é a trava de verdade — mas de lá só volta um
-    // `false`, que a resposta abaixo traduz como "saldo insuficiente". O
-    // anunciante recarregaria crédito para sempre sem descobrir o motivo.
+    // Lead reprovado pelo antifraude não fecha o funil: a jornada que o gerou
+    // estava sob suspeita (tablet sem deslocamento, GPS falso).
     if (lead.status === 'INVALID') {
       res.status(409).json({
         error: 'Lead não elegível',
@@ -479,32 +478,32 @@ router.patch(
       return;
     }
 
-    const debitou = await creditService.debitLeadConversion(lead.company_id, lead.id, valor);
-
-    if (!debitou) {
-      res.status(402).json({
-        error: 'Saldo insuficiente',
-        message: 'Adicione crédito antes de converter o lead',
+    // Os dois juntos: o contador da campanha vivia dentro da função de débito
+    // que saiu daqui, e sem ele a taxa de conversão dos painéis fica em 0%.
+    const atualizado = await prisma.$transaction(async (tx) => {
+      const l = await tx.lead.update({
+        where: { id: lead.id },
+        data: {
+          status: 'CONVERTED',
+          conversion_value: valor,
+          converted_at: new Date(),
+        },
+        select: { motorista_id: true, campaign_id: true },
       });
-      return;
-    }
 
-    await prisma.lead.update({
-      where: { id: lead.id },
-      data: {
-        status: 'CONVERTED',
-        conversion_value: valor,
-        converted_at: new Date(),
-      },
+      await tx.campaign.update({
+        where: { id: l.campaign_id },
+        data: { conversions: { increment: 1 } },
+      });
+
+      return l;
     });
 
     logger.info(`Lead ${lead.id} convertido por ${req.user?.id} (R$ ${valor})`);
 
     const [saldoEmpresa, saldoMotorista] = await Promise.all([
       creditService.getBalance(lead.company_id),
-      prisma.lead
-        .findUniqueOrThrow({ where: { id: lead.id }, select: { motorista_id: true } })
-        .then((l) => creditService.getDriverBalance(l.motorista_id)),
+      creditService.getDriverBalance(atualizado.motorista_id),
     ]);
 
     res.json({

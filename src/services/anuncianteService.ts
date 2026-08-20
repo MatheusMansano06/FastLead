@@ -176,6 +176,9 @@ export class AnuncianteService {
         daily_minutes: dailyMinutes,
         price_per_lead: data.pricePerLead,
         total_investment: totalInvestment,
+        // Snapshot: o motorista é pago por hora de tela pela taxa do plano que
+        // ele aceitou. Recalcular pela tabela vigente reescreveria o passado.
+        driver_rate_hour: quote.driverRateHour,
         target_regions: data.targetRegions || [],
         target_states: targetStates,
         target_cities: (data.targetCities || []).filter(Boolean),

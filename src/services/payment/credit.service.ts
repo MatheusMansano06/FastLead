@@ -4,12 +4,22 @@ import { CreditTransactionType, DriverEarningStatus } from '@prisma/client';
 import { mercadoPagoService } from './mercadopago.service';
 
 /**
- * Comissão do motorista por lead convertido. Decisão de negócio: 30% flat.
+ * Fatia do motorista no preço do pacote: um terço.
  *
- * Alterar aqui só afeta ganhos futuros — cada `DriverEarning` grava a taxa
- * vigente no momento em `commission_rate`, e o passado nunca é recalculado.
+ * O preço se divide em três partes proporcionais — motorista, custos
+ * operacionais e margem —, então o motorista acompanha desconto e acréscimo:
+ * R$ 2,50/h no preço-base, R$ 1,63/h no piso da tabela, R$ 3,50/h num plano
+ * com acréscimo. Ver `frontend/src/lib/rateCard.js` e a planilha
+ * Fast_Lead_Tabela_Precificacao_v2.
+ *
+ * O motorista é pago por TEMPO DE TELA, não por lead convertido. A taxa por
+ * hora de cada campanha fica em `Campaign.driver_rate_hour`, gravada na
+ * contratação — mudar a tabela de preços não reescreve o que já foi prometido.
  */
-export const COMMISSION_RATE = 0.3;
+export const FATIA_MOTORISTA = 1 / 3;
+
+/** Milissegundos em uma hora — divisor do acúmulo por tempo de tela. */
+const MS_POR_HORA = 3_600_000;
 
 /**
  * Serviço de crédito da empresa e da carteira do motorista.
@@ -325,50 +335,101 @@ export class CreditService {
    *
    * Retorna: true se debitou, false se saldo insuficiente.
    */
-  async debitLeadConversion(
-    company_id: string,
-    lead_id: string,
-    total_amount: number // Valor total do lead (negociado empresa-motorista)
-  ): Promise<boolean> {
-    const comissao = new Decimal(total_amount).mul(COMMISSION_RATE);
+  /**
+   * Credita o motorista pelo tempo de tela exibido e debita a empresa.
+   *
+   * Chamado a cada lote de impressões que o tablet sincroniza. O ganho vive em
+   * UMA linha por motorista/campanha/dia: uma linha por inserção de 10 segundos
+   * deixaria o extrato ilegível e o banco enorme.
+   *
+   * ⚠️ O valor é recalculado a partir do TOTAL de `screen_ms` do dia, nunca
+   * somado lote a lote. A R$ 2,50/h uma inserção de 10s vale R$ 0,00694: somar
+   * lotes arredondados a centavos faria o pago derivar do tempo real conforme o
+   * dia avança. Recalculando do total, o erro nunca passa de meio centavo.
+   *
+   * A empresa é debitada apenas pelo DELTA (valor novo menos o já debitado),
+   * com a mesma guarda de saldo no WHERE do UPDATE usada no resto do serviço.
+   *
+   * Se o saldo não cobrir, o ganho do motorista é registrado assim mesmo: o
+   * anúncio já apareceu na tela e ele já trabalhou. Quem impede a campanha de
+   * rodar sem saldo é a montagem da playlist, não o acúmulo.
+   */
+  async creditScreenTime(params: {
+    motorista_id: string;
+    campaign_id: string;
+    company_id: string;
+    duration_ms: number;
+    rate_hour: Decimal;
+  }): Promise<void> {
+    const { motorista_id, campaign_id, company_id, duration_ms, rate_hour } = params;
+    if (duration_ms <= 0) return;
 
-    const lead = await prisma.lead.findUnique({
-      where: { id: lead_id },
-      select: { motorista_id: true, company_id: true, campaign_id: true, status: true },
-    });
-
-    if (!lead) {
-      console.error(`[CREDIT] Lead ${lead_id} não existe`);
-      return false;
-    }
-    if (lead.company_id !== company_id) {
-      console.error(`[CREDIT] Lead ${lead_id} não pertence à empresa ${company_id}`);
-      return false;
-    }
-    // Lead reprovado não vira dinheiro. Chega aqui marcado quando a jornada que
-    // o gerou estava sob suspeita antifraude (tablet sem deslocamento, GPS
-    // falso). A trava fica neste ponto de propósito: é o único lugar por onde
-    // a comissão passa, e é aqui que ela precisa ser negada mesmo que alguma
-    // tela futura tente converter o lead sem olhar o status.
-    if (lead.status === 'INVALID') {
-      console.warn(`[CREDIT] Lead ${lead_id} está INVALID — comissão negada`);
-      return false;
-    }
+    // Data de competência sem hora — a coluna é @db.Date.
+    const hoje = new Date();
+    const earned_date = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate()));
 
     try {
-      return await prisma.$transaction(async (tx) => {
-        // O saldo suficiente é condição do UPDATE: se outra conversão passou na
-        // frente e derrubou o saldo, o updateMany casa 0 linhas e desistimos.
+      await prisma.$transaction(async (tx) => {
+        const existente = await tx.driverEarning.findUnique({
+          where: {
+            motorista_id_campaign_id_earned_date: { motorista_id, campaign_id, earned_date },
+          },
+          select: { id: true, screen_ms: true, amount: true, status: true },
+        });
+
+        // Ganho já repassado não é mexido: o dia fecharia com valor diferente
+        // do comprovante do PIX. O tempo novo abre linha do dia seguinte.
+        if (existente && existente.status !== DriverEarningStatus.PENDING) {
+          console.warn(
+            `[CREDIT] Ganho ${existente.id} já está ${existente.status}; ${duration_ms}ms não acumulados`
+          );
+          return;
+        }
+
+        const msTotal = (existente?.screen_ms ?? 0) + duration_ms;
+        const valorTotal = rate_hour.mul(msTotal).div(MS_POR_HORA).toDecimalPlaces(2);
+        const jaDebitado = existente?.amount ?? new Decimal(0);
+        const delta = valorTotal.sub(jaDebitado);
+
+        if (existente) {
+          await tx.driverEarning.update({
+            where: { id: existente.id },
+            data: { screen_ms: msTotal, amount: valorTotal },
+          });
+        } else {
+          await tx.driverEarning.create({
+            data: {
+              motorista_id,
+              company_id,
+              campaign_id,
+              earned_date,
+              screen_ms: msTotal,
+              amount: valorTotal,
+              commission_rate: new Decimal(FATIA_MOTORISTA).toDecimalPlaces(4),
+              description: 'Ganho por tempo de tela',
+            },
+          });
+        }
+
+        // Arredondamento pode deixar o delta em zero num lote curto; sem valor
+        // novo não há o que mover no saldo nem no extrato.
+        if (delta.isZero()) return;
+
+        await tx.motoristProfile.update({
+          where: { id: motorista_id },
+          data: { total_earnings: { increment: delta } },
+        });
+
         const debitado = await tx.company.updateMany({
-          where: { id: company_id, credit_balance: { gte: comissao } },
-          data: { credit_balance: { decrement: comissao } },
+          where: { id: company_id, credit_balance: { gte: delta } },
+          data: { credit_balance: { decrement: delta } },
         });
 
         if (debitado.count === 0) {
-          console.log(
-            `[CREDIT] Saldo insuficiente para converter lead ${lead_id} (precisa de R$ ${comissao})`
+          console.error(
+            `[CREDIT] Empresa ${company_id} sem saldo para R$ ${delta} de tela da campanha ${campaign_id}`
           );
-          return false;
+          return;
         }
 
         const { credit_balance } = await tx.company.findUniqueOrThrow({
@@ -379,54 +440,21 @@ export class CreditService {
         await tx.companyCreditTx.create({
           data: {
             company_id,
-            lead_id,
-            type: CreditTransactionType.LEAD_PAYOUT,
-            amount: comissao,
+            campaign_id,
+            type: CreditTransactionType.SCREEN_PAYOUT,
+            amount: delta,
             balance_after: credit_balance,
-            description: `Comissão de lead convertido (${COMMISSION_RATE * 100}% para motorista)`,
+            description: 'Repasse por tempo de tela exibido',
           },
         });
-
-        // Contraparte: o motorista recebe. `commission_rate` fica gravada para
-        // que mudar a taxa no futuro não reescreva o que já foi ganho.
-        await tx.driverEarning.create({
-          data: {
-            motorista_id: lead.motorista_id,
-            company_id,
-            lead_id,
-            amount: comissao,
-            commission_rate: new Decimal(COMMISSION_RATE),
-            description: 'Comissão por lead convertido',
-          },
-        });
-
-        await tx.motoristProfile.update({
-          where: { id: lead.motorista_id },
-          data: { total_earnings: { increment: comissao } },
-        });
-
-        // Contadores da campanha. Ninguém os atualizava, então a taxa de
-        // conversão mostrada à empresa e no painel MASTER ficava presa em 0%
-        // por mais vendas que fossem fechadas. Ficam dentro da transação: uma
-        // conversão que der rollback não pode deixar o contador adiantado.
-        await tx.campaign.update({
-          where: { id: lead.campaign_id },
-          data: {
-            conversions: { increment: 1 },
-            total_investment: { increment: comissao },
-          },
-        });
-
-        console.log(
-          `[CREDIT] Lead ${lead_id}: -R$ ${comissao} da empresa ${company_id}, +R$ ${comissao} para o motorista ${lead.motorista_id}`
-        );
-        return true;
       });
-    } catch (error) {
-      console.error(`[CREDIT] Falha ao converter lead ${lead_id}:`, error);
-      return false;
+    } catch (e) {
+      // Falha de acúmulo não pode derrubar o sync do tablet: o anúncio já
+      // rodou e as impressões já foram gravadas.
+      console.error(`[CREDIT] Falha ao acumular tela da campanha ${campaign_id}:`, e);
     }
   }
+
 
   /**
    * Saldo do motorista: soma dos ganhos ainda não repassados.

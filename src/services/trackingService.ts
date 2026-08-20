@@ -4,6 +4,7 @@ import config from '../config/config';
 import logger from '../config/logger';
 import { NotFoundError } from '../utils/errors';
 import { TelemetryService } from './telemetryService';
+import { creditService } from './payment/credit.service';
 
 interface ScanContext {
   campaignId: string;
@@ -153,7 +154,7 @@ export class TrackingService {
 
     const campaigns = await prisma.campaign.findMany({
       where: { id: { in: items.map((i) => i.campaignId) }, deleted_at: null },
-      select: { id: true, company_id: true },
+      select: { id: true, company_id: true, driver_rate_hour: true },
     });
     const byId = new Map(campaigns.map((c) => [c.id, c]));
 
@@ -185,6 +186,25 @@ export class TrackingService {
         })
       )
     );
+
+    // O motorista é pago por tempo de tela, então é aqui que o dinheiro se
+    // move — não mais na conversão do lead. Soma a duração por campanha para
+    // acumular de uma vez em vez de uma transação por inserção de 10 segundos.
+    const msPorCampanha = rows.reduce<Record<string, number>>((acc, r) => {
+      acc[r.campaign_id] = (acc[r.campaign_id] || 0) + r.duration_ms;
+      return acc;
+    }, {});
+
+    for (const [campaign_id, duration_ms] of Object.entries(msPorCampanha)) {
+      const campanha = byId.get(campaign_id)!;
+      await creditService.creditScreenTime({
+        motorista_id: motoristaId,
+        campaign_id,
+        company_id: campanha.company_id,
+        duration_ms,
+        rate_hour: campanha.driver_rate_hour,
+      });
+    }
 
     return { recorded: rows.length };
   }
