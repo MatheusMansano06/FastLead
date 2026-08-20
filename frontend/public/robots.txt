@@ -1,0 +1,19 @@
+# Sem este arquivo o `serve -s` devolve o index.html no lugar dele (fallback de
+# SPA), com status 200 e content-type text/html. O Google lê isso como
+# "Robots.txt inacessível" e para de indexar o site inteiro.
+
+User-agent: *
+Allow: /
+
+# Áreas privadas e telas de operação: não têm conteúdo público e não devem
+# gastar orçamento de rastreamento.
+Disallow: /app/
+Disallow: /admin/
+Disallow: /tablet
+
+# Landing de captura e redirect do QR: são endereços por campanha, gerados aos
+# milhares. Indexá-los polui a busca e não traz ninguém.
+Disallow: /lp/
+Disallow: /r/
+
+Sitemap: https://www.fastlead.com.br/sitemap.xml
