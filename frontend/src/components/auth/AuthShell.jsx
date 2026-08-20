@@ -108,7 +108,7 @@ export default function AuthShell({ theme, children, footer }) {
       </aside>
 
       {/* ─── Form column ─── */}
-      <main className="flex min-h-screen flex-col px-5 py-8 sm:px-8 md:px-12 lg:py-12">
+      <main className="flex min-h-screen flex-col px-5 py-8 sm:px-8 md:px-12 lg:py-8">
         {/* mobile top bar */}
         <div className="mb-8 flex items-center justify-between lg:hidden">
           <Link to="/" className="no-underline">
