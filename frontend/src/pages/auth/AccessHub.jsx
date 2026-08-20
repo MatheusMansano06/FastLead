@@ -45,11 +45,11 @@ export default function AccessHub({ mode = 'login' }) {
   ];
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-[#0B1D3A] text-white">
+    <div className="relative flex h-screen w-full flex-col overflow-hidden bg-[#0B1D3A] text-white">
       <div className="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full bg-brand/30 blur-3xl" />
       <div className="pointer-events-none absolute -bottom-40 -left-24 h-[28rem] w-[28rem] rounded-full bg-mint/20 blur-3xl" />
 
-      <nav className="relative z-10 flex items-center justify-between px-6 py-5 md:px-10">
+      <nav className="relative z-10 flex shrink-0 items-center justify-between px-6 py-5 md:px-10">
         <Link to="/" className="no-underline"><LogoWordmark dark /></Link>
         <Link
           to={isLogin ? '/cadastro' : '/entrar'}
@@ -59,7 +59,7 @@ export default function AccessHub({ mode = 'login' }) {
         </Link>
       </nav>
 
-      <div className="relative z-10 mx-auto flex min-h-[calc(100vh-88px)] max-w-5xl flex-col justify-center px-6 py-12">
+      <div className="relative z-10 mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center overflow-y-auto px-6 py-6">
         <div className="mx-auto max-w-2xl text-center">
           <span className="text-xs font-semibold uppercase tracking-[0.25em] text-aqua">
             {isLogin ? 'Acessar a plataforma' : 'Criar sua conta'}
@@ -72,12 +72,12 @@ export default function AccessHub({ mode = 'login' }) {
           </p>
         </div>
 
-        <div className="mt-12 grid gap-6 md:grid-cols-2">
+        <div className="mt-8 grid gap-5 md:grid-cols-2">
           {options.map((o) => (
             <Link
               key={o.key}
               to={o.to}
-              className="group flex flex-col rounded-3xl bg-white/[0.04] p-8 no-underline ring-1 ring-white/10 transition hover:bg-white/[0.07] hover:ring-white/20 md:p-10"
+              className="group flex flex-col rounded-3xl bg-white/[0.04] p-7 no-underline ring-1 ring-white/10 transition hover:bg-white/[0.07] hover:ring-white/20 md:p-8"
             >
               <span
                 className="flex h-14 w-14 items-center justify-center rounded-2xl text-white"
@@ -85,13 +85,13 @@ export default function AccessHub({ mode = 'login' }) {
               >
                 {o.icon}
               </span>
-              <span className="mt-6 text-xs font-semibold uppercase tracking-[0.25em]" style={{ color: o.accent === '#2563FF' ? '#7aa2ff' : '#33d69f' }}>
+              <span className="mt-5 text-xs font-semibold uppercase tracking-[0.25em]" style={{ color: o.accent === '#2563FF' ? '#7aa2ff' : '#33d69f' }}>
                 {o.eyebrow}
               </span>
               <h2 className="mt-2 font-grotesk text-2xl font-bold text-white">{o.title}</h2>
               <p className="mt-2 flex-1 text-sm text-white/60">{o.desc}</p>
               <span
-                className="mt-6 inline-flex items-center gap-2 text-sm font-semibold transition group-hover:gap-3"
+                className="mt-5 inline-flex items-center gap-2 text-sm font-semibold transition group-hover:gap-3"
                 style={{ color: o.accent === '#2563FF' ? '#7aa2ff' : '#33d69f' }}
               >
                 {o.cta}
