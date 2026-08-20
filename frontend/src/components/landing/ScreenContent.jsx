@@ -27,9 +27,9 @@ export default function ScreenContent({ section }) {
 
       {/* 0 · Logo */}
       <Panel active={section === 0}>
-        <LogoMark className="h-20 w-auto" glow />
-        <p className="mt-6 font-grotesk text-2xl font-bold tracking-tight text-offwhite">
-          FAST<span className="text-brand">LEAD</span>
+        <LogoMark className="h-20 w-auto" glow onDark />
+        <p className="mt-6 font-grotesk text-2xl font-bold italic tracking-tight text-offwhite">
+          fast<span className="text-[#4D82FF]">LEAD</span>
         </p>
         <p className="mt-1 text-xs uppercase tracking-[0.25em] text-offwhite/45">
           Anuncie em movimento
@@ -117,9 +117,9 @@ export default function ScreenContent({ section }) {
 
       {/* 5 · Finale */}
       <Panel active={section === 5}>
-        <LogoMark className="h-20 w-auto" glow />
-        <p className="mt-6 font-grotesk text-2xl font-bold tracking-tight text-offwhite">
-          FAST<span className="text-brand">LEAD</span>
+        <LogoMark className="h-20 w-auto" glow onDark />
+        <p className="mt-6 font-grotesk text-2xl font-bold italic tracking-tight text-offwhite">
+          fast<span className="text-[#4D82FF]">LEAD</span>
         </p>
         <p className="mt-2 text-sm text-offwhite/55">Bora começar?</p>
       </Panel>

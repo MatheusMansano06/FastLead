@@ -47,9 +47,9 @@ export default function Tablet({ progress, reduced }) {
 
           {/* 1 · Logo (hero) — visible from the very top */}
           <Reveal progress={progress} o={[0.09, 0.14]} oOut={[1, 0]} className={SCREEN}>
-            <LogoMark className="h-16 w-auto" glow />
-            <p className="mt-5 font-grotesk text-lg font-bold tracking-tight text-offwhite">
-              FAST<span className="text-brand">LEAD</span>
+            <LogoMark className="h-16 w-auto" glow onDark />
+            <p className="mt-5 font-grotesk text-lg font-bold italic tracking-tight text-offwhite">
+              fast<span className="text-[#4D82FF]">LEAD</span>
             </p>
             <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-offwhite/45">
               Anuncie em movimento
@@ -144,9 +144,9 @@ export default function Tablet({ progress, reduced }) {
 
           {/* Finale · Logo again — visible through the very end */}
           <Reveal progress={progress} o={[0.86, 0.92]} oOut={[0, 1]} className={SCREEN}>
-            <LogoMark className="h-16 w-auto" glow />
-            <p className="mt-5 font-grotesk text-lg font-bold tracking-tight text-offwhite">
-              FAST<span className="text-brand">LEAD</span>
+            <LogoMark className="h-16 w-auto" glow onDark />
+            <p className="mt-5 font-grotesk text-lg font-bold italic tracking-tight text-offwhite">
+              fast<span className="text-[#4D82FF]">LEAD</span>
             </p>
           </Reveal>
         </div>
