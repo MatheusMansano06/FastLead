@@ -1,0 +1,8 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "deploy": {
+    "preDeployCommand": [
+      "npx prisma db execute --schema prisma/schema.prisma --file prisma/sql/2026-08-20-ganho-por-tempo-de-tela.sql && npx prisma db push --skip-generate"
+    ]
+  }
+}
