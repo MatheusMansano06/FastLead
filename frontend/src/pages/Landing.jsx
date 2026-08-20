@@ -7,7 +7,6 @@ import Reveal from '../components/landing/Reveal';
 import AdTablet from '../components/landing/AdTablet';
 import AppBadges from '../components/landing/AppBadges';
 import AssistenteFastLead from '../components/landing/AssistenteFastLead';
-import { calcularPlano, moeda } from '../lib/rateCard';
 import passageiroTabletImg from '/passageiro-tablet.webp';
 
 /**
@@ -61,16 +60,6 @@ function Secao({ id, children, className = '', fundo = 'bg-white' }) {
 }
 
 /* ─────────────────────────── página ─────────────────────────── */
-
-// Piso de investimento derivado do MESMO rate card do simulador — se o preço
-// mudar lá, a âncora do hero acompanha sozinha em vez de virar mentira.
-const PLANO_ENTRADA = calcularPlano({
-  veiculos: 10,
-  contratoId: '1s',
-  horas: 2,
-  periodos: ['tarde'],
-  pracas: [],
-});
 
 const ETAPAS_ISL = [
   {

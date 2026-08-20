@@ -1,149 +1,186 @@
 /**
- * Tabela de referência do simulador de mídia da landing.
+ * Precificação FastLead — fonte única da verdade.
  *
- * ⚠️ VALORES ILUSTRATIVOS. Nada aqui vem da API — é uma estimativa comercial
- * para o anunciante ter ordem de grandeza antes de falar com a gente. Toda tela
- * que consome este arquivo é obrigada a exibir o selo "valor ilustrativo".
- * Número real de campanha sai de proposta / do painel, nunca daqui.
+ * Vem da planilha `Fast_Lead_Tabela_Precificacao_v2.xlsx` (abas Premissas,
+ * Tabela Comercial, Contratos, Simulador) e do documento
+ * `Premissas de Precificação — Fast Lead`.
  *
- * Para reajustar preço, mexa SÓ neste arquivo — o layout não conhece número.
+ * FÓRMULA (os ajustes são SOMADOS e aplicados de uma vez sobre o preço-base):
  *
- * Ancoragem da tarifa base: o modelo de negócio prevê ~R$ 250/veículo/mês na
- * configuração de referência (4h/dia, período único), do qual 30% é a comissão
- * do motorista. 4h × 30d × R$ 2,00 = R$ 240. Ver decisao_modelo_comissao.
+ *   preço = 1.500 × (horas ÷ 200) × (1 + ajustePacote + ajusteCarros
+ *                                      + ajusteHoras + ajustePrazo)
+ *
+ * O pacote de referência é 200 horas · 100 carros · 8h/dia · 1 mês = R$ 1.500.
+ *
+ * ⚠️ O NÚMERO DE CARROS NÃO MULTIPLICA O PREÇO. As horas contratadas são
+ * repartidas entre a frota (pulverização); mais carros = mais desconto, porque
+ * a mesma tela é diluída em mais veículos. O modelo anterior multiplicava por
+ * veículo e inflava o preço em uma ordem de grandeza.
  */
 
-/** Tarifa base: R$ por veículo, por hora de exibição, por dia. */
-export const TARIFA_HORA_VEICULO = 2.0;
+/** Preço-base do pacote de referência (200h · 100 carros · 8h/dia · 1 mês). */
+export const PRECO_BASE = 1500;
 
-/** Degraus do slider de veículos (espelham a print aprovada). */
-export const DEGRAUS_VEICULOS = [10, 50, 100, 200, 300, 500, 1000, 10000];
+/** Pacote de referência, em horas de tela por mês (8h/dia × 25 dias). */
+export const PACOTE_REFERENCIA_H = 200;
 
-/** Degraus do slider de contrato. `dias` alimenta o cálculo. */
-export const DEGRAUS_CONTRATO = [
-  { id: '1d', label: '1d', nome: '1 dia', dias: 1 },
-  { id: '1s', label: '1s', nome: '1 semana', dias: 7 },
-  { id: '1m', label: '1m', nome: '1 mês', dias: 30 },
-  { id: '3m', label: '3m', nome: '3 meses', dias: 90 },
-  { id: '6m', label: '6m', nome: '6 meses', dias: 180 },
-  { id: '12m', label: '12m', nome: '12 meses', dias: 365 },
-];
+/** Dias de operação considerados no mês. */
+export const DIAS_OPERACAO_MES = 25;
 
-/** Degraus do slider de horas no ar por dia. */
-export const DEGRAUS_HORAS = [1, 2, 3, 4, 5, 6, 7, 8];
+/** Duração de cada inserção, em segundos. */
+export const SEGUNDOS_POR_EXIBICAO = 10;
 
 /**
- * Períodos de exibição. O fator reflete disputa por inventário:
- * manhã e noite são pico de deslocamento, tarde é o vale.
+ * Repartição do preço. As três fatias são PROPORCIONAIS: acompanham o preço
+ * seja qual for o ajuste, então o desconto é rateado igualmente entre elas.
+ * Consequência declarada: o motorista absorve um terço de cada desconto.
+ */
+export const FATIA_MOTORISTA = 1 / 3;
+export const FATIA_CUSTOS = 1 / 3;
+export const FATIA_MARGEM = 1 / 3;
+
+/* ───────────────────────── eixos de ajuste ───────────────────────── */
+
+/** Veículos. Referência: 100 carros. Poucos carros pagam mais; escala desconta. */
+export const DEGRAUS_VEICULOS = [
+  { valor: 10, ajuste: 0.1 },
+  { valor: 50, ajuste: 0.05 },
+  { valor: 100, ajuste: 0 },
+  { valor: 200, ajuste: -0.05 },
+  { valor: 300, ajuste: -0.08 },
+  { valor: 500, ajuste: -0.1 },
+  { valor: 1000, ajuste: -0.13 },
+  { valor: 10000, ajuste: -0.2 },
+];
+
+/** Horas/dia. Referência: 8h (janela cheia). Só acréscimo — nunca desconto. */
+export const DEGRAUS_HORAS = [
+  { valor: 1, ajuste: 0.3 },
+  { valor: 2, ajuste: 0.25 },
+  { valor: 3, ajuste: 0.2 },
+  { valor: 4, ajuste: 0.15 },
+  { valor: 5, ajuste: 0.1 },
+  { valor: 6, ajuste: 0.05 },
+  { valor: 7, ajuste: 0.02 },
+  { valor: 8, ajuste: 0 },
+];
+
+/** Contrato. Referência: 1 mês. `meses` multiplica o pacote (3 meses = 3 pacotes). */
+export const DEGRAUS_CONTRATO = [
+  { id: '1d', label: '1d', nome: '1 dia', ajuste: 0.2, meses: 1 / DIAS_OPERACAO_MES, dias: 1 },
+  { id: '1s', label: '1s', nome: '1 semana', ajuste: 0.1, meses: 5 / DIAS_OPERACAO_MES, dias: 7 },
+  { id: '1m', label: '1m', nome: '1 mês', ajuste: 0, meses: 1, dias: 30 },
+  { id: '3m', label: '3m', nome: '3 meses', ajuste: -0.05, meses: 3, dias: 90 },
+  { id: '6m', label: '6m', nome: '6 meses', ajuste: -0.1, meses: 6, dias: 180 },
+  { id: '12m', label: '12m', nome: '12 meses', ajuste: -0.15, meses: 12, dias: 365 },
+];
+
+/** Tamanho do pacote, em horas/mês. Referência: 200h. */
+export const DEGRAUS_PACOTE = [
+  { valor: 50, ajuste: 0.1 },
+  { valor: 100, ajuste: 0.05 },
+  { valor: 200, ajuste: 0 },
+  { valor: 400, ajuste: -0.05 },
+  { valor: 1000, ajuste: -0.1 },
+];
+
+/**
+ * Períodos do dia. Segmentação da campanha — NÃO entram no preço.
+ * A precificação tem quatro eixos (pacote, carros, horas/dia, prazo) e o
+ * período não é um deles.
  */
 export const PERIODOS = [
-  { id: 'manha', nome: 'Manhã', janela: '06h — 12h', fator: 1.05 },
-  { id: 'tarde', nome: 'Tarde', janela: '12h — 18h', fator: 0.95 },
-  { id: 'noite', nome: 'Noite', janela: '18h — 00h', fator: 1.1 },
+  { id: 'manha', nome: 'Manhã', janela: '06h — 12h' },
+  { id: 'tarde', nome: 'Tarde', janela: '12h — 18h' },
+  { id: 'noite', nome: 'Noite', janela: '18h — 00h' },
 ];
 
-/** Desconto por volume de veículos contratados. */
-const DESCONTO_VOLUME = [
-  { min: 10000, desconto: 0.35 },
-  { min: 1000, desconto: 0.25 },
-  { min: 500, desconto: 0.2 },
-  { min: 300, desconto: 0.15 },
-  { min: 200, desconto: 0.12 },
-  { min: 100, desconto: 0.08 },
-  { min: 50, desconto: 0.05 },
-  { min: 0, desconto: 0 },
-];
+/* ───────────────────────── cálculo ───────────────────────── */
 
-/** Desconto progressivo por prazo — é o gancho do bloco "Turbine seu plano". */
-const DESCONTO_PRAZO = {
-  '1d': 0,
-  '1s': 0,
-  '1m': 0.05,
-  '3m': 0.1,
-  '6m': 0.15,
-  '12m': 0.22,
-};
+const ajusteDe = (degraus, valor) =>
+  degraus.find((d) => d.valor === valor)?.ajuste ?? 0;
+
+export const ajusteVeiculos = (v) => ajusteDe(DEGRAUS_VEICULOS, v);
+export const ajusteHoras = (h) => ajusteDe(DEGRAUS_HORAS, h);
+export const ajustePacote = (p) => ajusteDe(DEGRAUS_PACOTE, p);
+export const ajustePrazo = (id) =>
+  DEGRAUS_CONTRATO.find((c) => c.id === id)?.ajuste ?? 0;
 
 /**
- * Fator de praça. Mercados com mais disputa por inventário custam mais.
- * Aplicamos o MAIOR fator entre as praças escolhidas (a praça premium manda no
- * preço), não a média — senão diluir SP em 20 cidades pequenas baratearia SP.
- */
-const FATOR_PRACA = { SP_CAPITAL: 1.25, RJ_CAPITAL: 1.15, CAPITAL: 1.05, INTERIOR: 1.0 };
-
-export function fatorDePraca(pracas) {
-  if (!pracas?.length) return 1.0;
-  return Math.max(...pracas.map((p) => FATOR_PRACA[p.tier] ?? FATOR_PRACA.INTERIOR));
-}
-
-function descontoVolume(veiculos) {
-  return DESCONTO_VOLUME.find((f) => veiculos >= f.min)?.desconto ?? 0;
-}
-
-export function descontoPrazo(contratoId) {
-  return DESCONTO_PRAZO[contratoId] ?? 0;
-}
-
-/**
- * Fator de período. Nenhum selecionado = dia inteiro (1.0).
+ * Preço de UM pacote (um mês de contrato).
  *
- * Aplicamos o MAIOR fator entre os períodos escolhidos — o período premium
- * manda no preço —, pela mesma razão de `fatorDePraca`. A versão anterior
- * tirava a média e o preço CAÍA ao adicionar um período: manhã sozinha dava
- * 1.05, manhã+tarde dava (1.05+0.95)/2 = 1.00, e os três davam 1.033, ainda
- * abaixo de manhã sozinha. Quem compra manhã e aceita rodar de tarde também
- * não pode ficar mais barato do que quem só quer manhã.
+ * @param {{pacoteH:number, veiculos:number, horasDia:number, contratoId:string}} p
  */
-function fatorDePeriodo(periodosIds) {
-  if (!periodosIds?.length) return 1.0;
-  const fatores = PERIODOS.filter((p) => periodosIds.includes(p.id)).map((p) => p.fator);
-  if (!fatores.length) return 1.0;
-  return Math.max(...fatores);
+export function precoDoPacote({ pacoteH, veiculos, horasDia, contratoId }) {
+  const ajuste =
+    ajustePacote(pacoteH) +
+    ajusteVeiculos(veiculos) +
+    ajusteHoras(horasDia) +
+    ajustePrazo(contratoId);
+
+  return PRECO_BASE * (pacoteH / PACOTE_REFERENCIA_H) * (1 + ajuste);
 }
 
 /**
- * Estimativa de investimento do plano.
+ * Plano completo: preço do pacote, repartição e métricas derivadas.
  *
- * @returns {{
- *   total: number, mensal: number, diario: number, porVeiculoMes: number,
- *   dias: number, descontoTotal: number, descontoPrazoPct: number,
- *   descontoVolumePct: number, economia: number,
- *   impactosEstimados: number
- * }}
+ * O contrato multiplica o pacote — 3 meses são 3 pacotes —, e dentro de cada
+ * período as horas são repartidas entre os carros.
  */
-export function calcularPlano({ veiculos, contratoId, horas, periodos, pracas }) {
-  const contrato = DEGRAUS_CONTRATO.find((c) => c.id === contratoId) ?? DEGRAUS_CONTRATO[2];
-  const dias = contrato.dias;
+export function calcularPlano({ pacoteH, veiculos, horasDia, contratoId }) {
+  const contrato =
+    DEGRAUS_CONTRATO.find((c) => c.id === contratoId) ?? DEGRAUS_CONTRATO[2];
 
-  const bruto = veiculos * dias * horas * TARIFA_HORA_VEICULO;
+  const ajusteTotal =
+    ajustePacote(pacoteH) +
+    ajusteVeiculos(veiculos) +
+    ajusteHoras(horasDia) +
+    ajustePrazo(contratoId);
 
-  const fPeriodo = fatorDePeriodo(periodos);
-  const fPraca = fatorDePraca(pracas);
-  const dVolume = descontoVolume(veiculos);
-  const dPrazo = descontoPrazo(contratoId);
+  const pacote = precoDoPacote({ pacoteH, veiculos, horasDia, contratoId });
+  const total = pacote * contrato.meses;
 
-  // Descontos são combinados de forma multiplicativa: 20% e 22% viram 37,6%,
-  // não 42%. Evita que a soma dos degraus chegue perto de zerar a tarifa.
-  const fatorDesconto = (1 - dVolume) * (1 - dPrazo);
+  const exibicoesPacote = (pacoteH * 3600) / SEGUNDOS_POR_EXIBICAO;
+  const precoHora = pacote / pacoteH;
 
-  const semDesconto = bruto * fPeriodo * fPraca;
-  const total = semDesconto * fatorDesconto;
-
-  // Impacto = passageiros expostos. Referência operacional: ~2,5 corridas por
-  // hora de tablet ligado. É premissa de planejamento, não medição.
-  const impactosEstimados = Math.round(veiculos * dias * horas * 2.5);
+  const motoristaPacote = pacote * FATIA_MOTORISTA;
 
   return {
+    // preço
+    pacote,
     total,
-    mensal: dias >= 30 ? (total / dias) * 30 : total,
-    diario: total / dias,
-    porVeiculoMes: veiculos ? (total / dias / veiculos) * 30 : 0,
-    dias,
-    descontoTotal: 1 - fatorDesconto,
-    descontoPrazoPct: dPrazo,
-    descontoVolumePct: dVolume,
-    economia: semDesconto - total,
-    impactosEstimados,
+    ajusteTotal,
+    ajustes: {
+      pacote: ajustePacote(pacoteH),
+      veiculos: ajusteVeiculos(veiculos),
+      horas: ajusteHoras(horasDia),
+      prazo: ajustePrazo(contratoId),
+    },
+
+    // repartição (proporcional ao preço)
+    motorista: motoristaPacote,
+    custos: pacote * FATIA_CUSTOS,
+    margem: pacote * FATIA_MARGEM,
+
+    // métricas de tela
+    precoHora,
+    exibicoesPacote,
+    custoPorExibicao: pacote / exibicoesPacote,
+    cpmTecnico: (pacote / exibicoesPacote) * 1000,
+
+    // por veículo
+    horasPorVeiculo: veiculos ? pacoteH / veiculos : 0,
+    exibicoesPorVeiculo: veiculos ? exibicoesPacote / veiculos : 0,
+    motoristaPorVeiculo: veiculos ? motoristaPacote / veiculos : 0,
+
+    // o que o motorista ganha por hora de tela
+    taxaMotoristaHora: motoristaPacote / pacoteH,
+
+    // campanha
+    meses: contrato.meses,
+    diasOperacao: Math.round(contrato.meses * DIAS_OPERACAO_MES),
+    horasContratadas: pacoteH * contrato.meses,
+    margemCampanha: pacote * FATIA_MARGEM * contrato.meses,
   };
 }
 
@@ -154,7 +191,15 @@ export function proximoDegrauContrato(contratoId) {
   return DEGRAUS_CONTRATO[i + 1];
 }
 
+/* ───────────────────────── formatação ───────────────────────── */
+
 export const moeda = (v) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
+export const moedaCent = (v) =>
+  v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 export const numero = (v) => v.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+
+export const pct = (v) =>
+  `${v > 0 ? '+' : ''}${(v * 100).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%`;

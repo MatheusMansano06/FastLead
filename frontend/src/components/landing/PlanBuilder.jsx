@@ -13,12 +13,15 @@ import {
 import {
   DEGRAUS_CONTRATO,
   DEGRAUS_HORAS,
+  DEGRAUS_PACOTE,
   DEGRAUS_VEICULOS,
   PERIODOS,
+  ajustePrazo,
   calcularPlano,
-  descontoPrazo,
   moeda,
+  moedaCent,
   numero,
+  pct,
   proximoDegrauContrato,
 } from '../../lib/rateCard';
 
@@ -285,27 +288,31 @@ export default function PlanBuilder() {
     pracaDaCidade(CIDADES.find((c) => c.cidade === 'São Paulo')),
     pracaDaCidade(CIDADES.find((c) => c.cidade === 'Campinas')),
   ]);
-  const [iVeiculos, setIVeiculos] = useState(5); // 500
-  const [iContrato, setIContrato] = useState(4); // 6m
-  const [iHoras, setIHoras] = useState(4); // 5h
+  // Defaults = pacote de referência da planilha (200h · 100 carros · 8h/dia · 1 mês).
+  const [iPacote, setIPacote] = useState(2); // 200h
+  const [iVeiculos, setIVeiculos] = useState(2); // 100 carros
+  const [iContrato, setIContrato] = useState(2); // 1 mês
+  const [iHoras, setIHoras] = useState(7); // 8h/dia
   const [periodos, setPeriodos] = useState(['manha']);
 
-  const veiculos = DEGRAUS_VEICULOS[iVeiculos];
+  const pacoteH = DEGRAUS_PACOTE[iPacote].valor;
+  const veiculos = DEGRAUS_VEICULOS[iVeiculos].valor;
   const contrato = DEGRAUS_CONTRATO[iContrato];
-  const horas = DEGRAUS_HORAS[iHoras];
+  const horas = DEGRAUS_HORAS[iHoras].valor;
 
+  // Praça e período são segmentação da campanha; não entram na fórmula.
   const plano = useMemo(
-    () => calcularPlano({ veiculos, contratoId: contrato.id, horas, periodos, pracas }),
-    [veiculos, contrato.id, horas, periodos, pracas],
+    () => calcularPlano({ pacoteH, veiculos, horasDia: horas, contratoId: contrato.id }),
+    [pacoteH, veiculos, horas, contrato.id],
   );
 
   const upsell = proximoDegrauContrato(contrato.id);
   const planoUpsell = useMemo(
     () =>
       upsell
-        ? calcularPlano({ veiculos, contratoId: upsell.id, horas, periodos, pracas })
+        ? calcularPlano({ pacoteH, veiculos, horasDia: horas, contratoId: upsell.id })
         : null,
-    [upsell, veiculos, horas, periodos, pracas],
+    [upsell, pacoteH, veiculos, horas],
   );
 
   const togglePeriodo = (id) =>
@@ -325,8 +332,9 @@ export default function PlanBuilder() {
             Monte seu plano de mídia nos tablets
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-[15px] leading-relaxed text-ink/55 md:text-base">
-            Escolha a abrangência, a quantidade de veículos, a duração da campanha e o
-            período de exibição. Veja seu investimento estimado em tempo real.
+            O pacote é o volume de tela contratado por mês — <strong className="font-semibold text-ink/75">200 horas</strong>{' '}
+            equivalem a 8h × 25 dias de operação. Os ajustes de pacote, volume, janela diária e
+            prazo são somados e aplicados de uma vez sobre o preço-base.
           </p>
         </div>
 
@@ -341,39 +349,51 @@ export default function PlanBuilder() {
 
             <div className="mt-2 divide-y divide-ink/[0.07]">
               <SliderDegraus
+                icone={IconTablet}
+                titulo="Pacote"
+                descricao="Horas de tela contratadas por mês. 200h é a referência."
+                degraus={DEGRAUS_PACOTE}
+                indice={iPacote}
+                onChange={setIPacote}
+                cor="#7C5CFF"
+                formatarRotulo={(p) => (p.valor >= 1000 ? `${p.valor / 1000}k h` : `${p.valor}h`)}
+                formatarBolha={(p) => `${numero(p.valor)}h · ${pct(p.ajuste)}`}
+              />
+
+              <SliderDegraus
                 icone={IconCarro}
                 titulo="Veículos"
-                descricao="Quantos carros exibem sua campanha."
+                descricao="Entre quantos carros as horas contratadas são pulverizadas."
                 degraus={DEGRAUS_VEICULOS}
                 indice={iVeiculos}
                 onChange={setIVeiculos}
                 cor="#2563FF"
-                formatarRotulo={(v) => (v >= 1000 ? `${v / 1000}k` : v)}
-                formatarBolha={(v) => `${numero(v)} carros`}
+                formatarRotulo={(v) => (v.valor >= 1000 ? `${v.valor / 1000}k` : v.valor)}
+                formatarBolha={(v) => `${numero(v.valor)} carros · ${pct(v.ajuste)}`}
+              />
+
+              <SliderDegraus
+                icone={IconRelogio}
+                titulo="Horas/dia"
+                descricao="Janela diária de exibição. 8h é a janela cheia do pacote."
+                degraus={DEGRAUS_HORAS}
+                indice={iHoras}
+                onChange={setIHoras}
+                cor="#00A0C4"
+                formatarRotulo={(h) => `${h.valor}H`}
+                formatarBolha={(h) => `${h.valor}h por dia · ${pct(h.ajuste)}`}
               />
 
               <SliderDegraus
                 icone={IconAgenda}
                 titulo="Contrato"
-                descricao="Por quanto tempo fica no ar."
+                descricao="Duração da campanha. 1 mês é a referência neutra."
                 degraus={DEGRAUS_CONTRATO}
                 indice={iContrato}
                 onChange={setIContrato}
                 cor="#00A86B"
                 formatarRotulo={(c) => c.label}
-                formatarBolha={(c) => c.nome}
-              />
-
-              <SliderDegraus
-                icone={IconRelogio}
-                titulo="Tempo"
-                descricao="Horas de exibição por dia."
-                degraus={DEGRAUS_HORAS}
-                indice={iHoras}
-                onChange={setIHoras}
-                cor="#00A0C4"
-                formatarRotulo={(h) => `${h}H`}
-                formatarBolha={(h) => `${h}h por dia`}
+                formatarBolha={(c) => `${c.nome} · ${pct(c.ajuste)}`}
               />
 
               {/* período */}
@@ -422,15 +442,46 @@ export default function PlanBuilder() {
               </div>
             </div>
 
+            {/* A campanha inteira — o contrato multiplica o pacote e as horas
+                são repartidas entre os carros, não multiplicadas por veículo. */}
+            <div className="mt-8 border-t border-ink/[0.07] pt-6">
+              <p className="text-[13px] font-bold uppercase tracking-[0.1em] text-ink">
+                A campanha inteira
+              </p>
+              <p className="mt-1 text-[12px] leading-snug text-ink/45">
+                O contrato multiplica o pacote: 3 meses são 3 pacotes. Dentro de cada período as
+                horas são repartidas entre os carros.
+              </p>
+              <div className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-ink/[0.07] sm:grid-cols-3">
+                {[
+                  ['Duração', `${contrato.nome} · ${numero(plano.diasOperacao)} dias`],
+                  ['Horas contratadas', `${numero(plano.horasContratadas)} h`],
+                  ['Horas por veículo', `${plano.horasPorVeiculo.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} h`],
+                  ['Exibições totais', numero(plano.exibicoesPacote * plano.meses)],
+                  ['Exibições por veículo', numero(plano.exibicoesPorVeiculo)],
+                  ['Investimento total', moeda(plano.total)],
+                  ['Preço por mês', moeda(plano.pacote)],
+                  ['Taxa do motorista', `${moedaCent(plano.taxaMotoristaHora)} /h`],
+                  ['Motorista por veículo', moedaCent(plano.motoristaPorVeiculo)],
+                  ['Margem da campanha', moeda(plano.margemCampanha)],
+                ].map(([k, v]) => (
+                  <div key={k} className="bg-white px-3.5 py-3">
+                    <p className="text-[10.5px] font-bold uppercase tracking-[0.1em] text-ink/40">{k}</p>
+                    <p className="mt-1 font-grotesk text-[15px] font-bold tabular-nums text-ink">{v}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* rodapé do painel */}
-            <div className="mt-8 flex flex-wrap items-center gap-x-7 gap-y-3 border-t border-ink/[0.07] pt-5">
+            <div className="mt-6 flex flex-wrap items-center gap-x-7 gap-y-3 border-t border-ink/[0.07] pt-5">
               <span className="flex items-center gap-2 text-[12px] text-ink/50">
                 <IconTablet className="h-4 w-4 text-brand" />
-                Exibição em tablets no banco do passageiro
+                Cada inserção dura 10 segundos
               </span>
               <span className="flex items-center gap-2 text-[12px] text-ink/50">
                 <IconCarro className="h-4 w-4 text-brand" />
-                Alcance qualificado em mobilidade urbana
+                Exibições na tela, não pessoas únicas alcançadas
               </span>
             </div>
           </div>
@@ -443,40 +494,99 @@ export default function PlanBuilder() {
                 Estimativa instantânea
               </span>
 
-              <p className="mt-5 text-[15px] font-semibold leading-snug text-ink">
-                Seu investimento para
-                <br />
-                este plano será de
+              <p className="mt-5 text-[12px] font-bold uppercase tracking-[0.14em] text-ink/45">
+                Preço do pacote
               </p>
 
-              <p className="mt-2 font-grotesk text-[40px] font-bold leading-none tracking-tight text-brand tabular-nums md:text-[46px]">
-                {moeda(plano.total)}
+              <p className="mt-1 font-grotesk text-[40px] font-bold leading-none tracking-tight text-brand tabular-nums md:text-[46px]">
+                {moeda(plano.pacote)}
+              </p>
+              <p className="mt-2 text-[12px] text-ink/50">
+                {numero(pacoteH)} horas · {numero(veiculos)} carros · {horas}h/dia · {contrato.nome}
               </p>
 
+              {/* Decomposição: preço-base e cada eixo de ajuste, como na planilha. */}
               <dl className="mt-5 space-y-2 border-t border-ink/[0.07] pt-4 text-[12.5px]">
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-ink/50">
+                    Preço-base <span className="text-ink/35">{numero(pacoteH)}h × {moedaCent(7.5)}</span>
+                  </dt>
+                  <dd className="font-semibold tabular-nums text-ink">{moeda(1500 * (pacoteH / 200))}</dd>
+                </div>
                 {[
-                  ['Equivalente por mês', moeda(plano.mensal)],
-                  ['Por veículo/mês', moeda(plano.porVeiculoMes)],
-                  ['Impactos estimados', numero(plano.impactosEstimados)],
-                ].map(([k, v]) => (
+                  [`Pacote ${numero(pacoteH)} horas`, plano.ajustes.pacote],
+                  [`Volume ${numero(veiculos)} carros`, plano.ajustes.veiculos],
+                  [`Janela diária ${horas}h por dia`, plano.ajustes.horas],
+                  [`Prazo ${contrato.nome}`, plano.ajustes.prazo],
+                ].map(([k, a]) => (
                   <div key={k} className="flex items-baseline justify-between gap-3">
                     <dt className="text-ink/50">{k}</dt>
-                    <dd className="font-semibold tabular-nums text-ink">{v}</dd>
-                  </div>
-                ))}
-                {plano.descontoTotal > 0 && (
-                  <div className="flex items-baseline justify-between gap-3">
-                    <dt className="text-[#00A86B]">Desconto aplicado</dt>
-                    <dd className="font-semibold tabular-nums text-[#00A86B]">
-                      −{Math.round(plano.descontoTotal * 100)}%
+                    <dd className="flex items-baseline gap-2 tabular-nums">
+                      <span className={a > 0 ? 'text-[#C2410C]' : a < 0 ? 'text-[#00A86B]' : 'text-ink/35'}>
+                        {pct(a)}
+                      </span>
+                      <span className="font-semibold text-ink">
+                        {a === 0 ? '+R$ 0' : moeda(1500 * (pacoteH / 200) * a)}
+                      </span>
                     </dd>
                   </div>
-                )}
+                ))}
+                <div className="flex items-baseline justify-between gap-3 border-t border-ink/[0.07] pt-2">
+                  <dt className="font-semibold text-ink">Ajuste total</dt>
+                  <dd className="flex items-baseline gap-2 tabular-nums">
+                    <span className={plano.ajusteTotal > 0 ? 'text-[#C2410C]' : plano.ajusteTotal < 0 ? 'text-[#00A86B]' : 'text-ink/35'}>
+                      {pct(plano.ajusteTotal)}
+                    </span>
+                    <span className="font-bold text-ink">{moeda(plano.pacote)}</span>
+                  </dd>
+                </div>
               </dl>
 
+              {/* Repartição do preço: as três fatias são proporcionais. */}
+              <div className="mt-5 border-t border-ink/[0.07] pt-4">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-ink/45">
+                    Margem por pacote
+                  </span>
+                  <span className="font-grotesk text-lg font-bold tabular-nums text-[#00A86B]">
+                    {moeda(plano.margem)}
+                  </span>
+                </div>
+                <div className="mt-2 flex h-1.5 overflow-hidden rounded-full">
+                  <span className="bg-[#7C5CFF]" style={{ width: '33.33%' }} />
+                  <span className="bg-ink/25" style={{ width: '33.33%' }} />
+                  <span className="bg-[#00A86B]" style={{ width: '33.34%' }} />
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-ink/50">
+                  <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-[#7C5CFF]" />Motorista</span>
+                  <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-ink/25" />Custos</span>
+                  <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-[#00A86B]" />Margem</span>
+                </div>
+                <p className="mt-2 text-[11.5px] leading-relaxed text-ink/45">
+                  33,3% do pacote. Motorista leva {moeda(plano.motorista)} — {moedaCent(plano.taxaMotoristaHora)} por
+                  hora de tela.
+                </p>
+              </div>
+
+              {/* Métricas de tela */}
+              <div className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-ink/[0.07]">
+                {[
+                  ['Preço/hora', moedaCent(plano.precoHora)],
+                  ['Custo por exibição', moedaCent(plano.custoPorExibicao)],
+                  ['Exibições no pacote', numero(plano.exibicoesPacote)],
+                  ['CPM técnico', moedaCent(plano.cpmTecnico)],
+                ].map(([k, v]) => (
+                  <div key={k} className="bg-white px-3.5 py-3">
+                    <p className="text-[10.5px] font-bold uppercase tracking-[0.1em] text-ink/40">{k}</p>
+                    <p className="mt-1 font-grotesk text-[15px] font-bold tabular-nums text-ink">{v}</p>
+                  </div>
+                ))}
+              </div>
+
               <p className="mt-4 text-[11.5px] leading-relaxed text-ink/40">
-                Valor ilustrativo. A proposta final é ajustada conforme segmentação e
-                disponibilidade de veículos na praça.
+                Os carros não multiplicam o preço: as horas contratadas são repartidas entre a
+                frota. Valor ilustrativo — a proposta final é ajustada conforme ocupação e
+                disponibilidade na praça.
               </p>
             </div>
 
@@ -497,18 +607,18 @@ export default function PlanBuilder() {
                   Passe para {upsell.nome} e reduza o custo mensal.
                 </p>
                 <p className="mt-3 text-[13px] leading-relaxed text-ink/55">
-                  Ampliando o prazo você aumenta a presença de marca, melhora a recorrência
-                  de impacto e desbloqueia{' '}
+                  Contratos longos ganham desconto pela previsibilidade de receita e pelo
+                  compromisso comercial —{' '}
                   <strong className="font-semibold text-[#00A86B]">
-                    {Math.round(descontoPrazo(upsell.id) * 100)}% de desconto progressivo
+                    {Math.abs(Math.round(ajustePrazo(upsell.id) * 100))}% no prazo de {upsell.nome}
                   </strong>
                   .
                 </p>
 
                 <div className="mt-4 flex items-baseline justify-between rounded-xl bg-white px-4 py-3 ring-1 ring-[#00A86B]/15">
-                  <span className="text-[12px] text-ink/50">Novo custo mensal</span>
+                  <span className="text-[12px] text-ink/50">Novo preço por pacote</span>
                   <span className="font-grotesk text-lg font-bold tabular-nums text-[#00A86B]">
-                    {moeda(planoUpsell.mensal)}
+                    {moeda(planoUpsell.pacote)}
                   </span>
                 </div>
 
