@@ -1,0 +1,27 @@
+# Configuração do serviço `fastlead-api` (deploy feito da raiz do repositório).
+#
+# O serviço do frontend NÃO é afetado: ele sobe de dentro de `frontend/`, e o
+# pacote enviado por aquele `railway up` não inclui este arquivo.
+#
+# Por que a migração roda aqui e não da máquina local: o Neon recusa conexão do
+# IP de fora, então `railway run -- prisma db push` não alcança o banco (o
+# `railway run` injeta a env de produção mas conecta pela máquina de quem roda).
+# De dentro do container a API fala com o banco normalmente.
+#
+# São dois passos de propósito:
+#
+#  1. O .sql aplica as mudanças estruturais com DDL explícito e idempotente.
+#     Nenhum statement dele remove coluna, tabela ou linha.
+#  2. `db push` SEM `--accept-data-loss` alinha o resto. Depois do passo 1 ele
+#     não encontra nada destrutivo e passa limpo — verificado no banco local.
+#
+# A flag `--accept-data-loss` foi deliberadamente evitada: ela é indiscriminada
+# e, no dia em que o schema remover uma coluna, apagaria dado de produção calada
+# dentro do deploy. Sem ela, um deploy que exija mudança destrutiva FALHA e pede
+# decisão humana — que é o comportamento que se quer aqui.
+
+[deploy]
+preDeployCommand = [
+  "npx prisma db execute --schema prisma/schema.prisma --file prisma/sql/2026-08-20-ganho-por-tempo-de-tela.sql",
+  "npx prisma db push --skip-generate",
+]
