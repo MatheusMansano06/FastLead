@@ -12,7 +12,7 @@
  * - API        -> nunca cacheia; o app já guarda a playlist em localStorage
  */
 
-const CACHE = 'fastlead-tablet-v1';
+const CACHE = 'fastlead-tablet-v2';
 const SHELL = ['/', '/tablet', '/manifest.webmanifest', '/favicon.svg'];
 
 self.addEventListener('install', (event) => {
