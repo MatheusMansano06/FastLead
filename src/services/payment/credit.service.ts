@@ -466,9 +466,10 @@ export class CreditService {
     pendente: number;
     pago: number;
     total: number;
-    leadsConvertidos: number;
+    horasDeTela: number;
+    leadsGerados: number;
   }> {
-    const [pendente, pago, leadsConvertidos] = await Promise.all([
+    const [pendente, pago, tela, leadsGerados] = await Promise.all([
       prisma.driverEarning.aggregate({
         where: { motorista_id, status: DriverEarningStatus.PENDING },
         _sum: { amount: true },
@@ -477,17 +478,28 @@ export class CreditService {
         where: { motorista_id, status: DriverEarningStatus.PAID },
         _sum: { amount: true },
       }),
-      // Cada ganho vem de um lead convertido. A home do motorista contava isso
-      // somando as campanhas aceitas, o que dava zero para quem ganhou por uma
-      // campanha que já saiu do tablet dele.
-      prisma.driverEarning.count({
+      // O que gera renda agora é tempo de tela, então é isso que o app mostra.
+      prisma.driverEarning.aggregate({
         where: { motorista_id, status: { not: DriverEarningStatus.CANCELLED } },
+        _sum: { screen_ms: true },
       }),
+      // Leads continuam sendo contados, mas saem da tabela de Lead — não de
+      // DriverEarning. Antes o número vinha de `count()` sobre os ganhos,
+      // porque cada ganho ERA um lead convertido; hoje cada ganho é um DIA DE
+      // TELA de uma campanha, e aquele count passaria a informar "dias
+      // creditados" com o rótulo de leads.
+      prisma.lead.count({ where: { motorista_id } }),
     ]);
 
     const p = Number(pendente._sum.amount ?? 0);
     const g = Number(pago._sum.amount ?? 0);
-    return { pendente: p, pago: g, total: p + g, leadsConvertidos };
+    return {
+      pendente: p,
+      pago: g,
+      total: p + g,
+      horasDeTela: Number(tela._sum.screen_ms ?? 0) / 3_600_000,
+      leadsGerados,
+    };
   }
 
   /** Extrato do motorista, mais recentes primeiro. */
@@ -506,6 +518,12 @@ export class CreditService {
         paid_at: true,
         payout_ref: true,
         lead_id: true,
+        // O extrato precisa dizer de ONDE veio o ganho: qual campanha, em que
+        // dia e quanto tempo de tela. Sem isso a linha vira um valor solto.
+        campaign_id: true,
+        screen_ms: true,
+        earned_date: true,
+        campaign: { select: { title: true } },
       },
     });
   }

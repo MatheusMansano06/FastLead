@@ -6,7 +6,7 @@ import { useAuthStore, homePathFor } from '../../stores/authStore';
 
 const theme = {
   ...AUTH_THEMES.motorista,
-  loginSubtitle: 'Veja seus ganhos por lead, repasses e o status do seu tablet.',
+  loginSubtitle: 'Veja seus ganhos por tempo de tela, repasses e o status do seu tablet.',
   emailPlaceholder: 'voce@email.com',
   registerPath: '/cadastro/motorista',
   registerCta: 'Quero ser parceiro',

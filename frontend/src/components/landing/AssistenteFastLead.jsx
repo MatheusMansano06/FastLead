@@ -17,8 +17,8 @@ const RESPOSTAS = {
 
     1. Instale o tablet FastLead no banco de trás do seu carro
     2. A gente fornece campanhas diferentes toda semana
-    3. Cada lead que o passageiro escaneia, você recebe uma comissão (em média R$ 30-150 por lead, depende da campanha)
-    4. O dinheiro cai na sua conta automaticamente
+    3. Você recebe por HORA DE TELA exibida — escaneando o passageiro o QR ou não. A taxa por hora vem do plano que a empresa contratou (no pacote de referência, R$ 2,50 por hora de tela)
+    4. O ganho é creditado conforme o anúncio roda e fica visível no app
 
     Funciona offline, sincroniza sozinho. Zero esforço — enquanto roda, ganha.`,
   },

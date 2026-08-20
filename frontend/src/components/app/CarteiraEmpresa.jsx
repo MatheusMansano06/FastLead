@@ -9,7 +9,8 @@ const PRESETS = [100, 250, 500, 1000];
 const ROTULO_TX = {
   DEPOSIT: 'Crédito adicionado',
   CAMPAIGN_DEBIT: 'Anúncio publicado',
-  LEAD_PAYOUT: 'Lead convertido',
+  LEAD_PAYOUT: 'Lead convertido (modelo antigo)',
+  SCREEN_PAYOUT: 'Tempo de tela exibido',
   REFUND: 'Reembolso',
   ADJUSTMENT: 'Ajuste',
 };

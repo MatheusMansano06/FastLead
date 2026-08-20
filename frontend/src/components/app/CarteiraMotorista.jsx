@@ -168,8 +168,8 @@ export default function CarteiraMotorista() {
           <p className="px-6 py-10 text-center text-sm text-ink/45">Carregando…</p>
         ) : ganhos.length === 0 ? (
           <p className="px-6 py-10 text-center text-sm text-ink/45">
-            Você ainda não tem ganhos. Eles aparecem quando uma empresa confirma
-            que um lead do seu tablet virou venda.
+            Você ainda não tem ganhos. Eles aparecem conforme os anúncios rodam
+            no seu tablet — você recebe por tempo de tela exibido.
           </p>
         ) : (
           <ul className="divide-y divide-black/5">
@@ -177,10 +177,18 @@ export default function CarteiraMotorista() {
               <li key={g.id} className="flex items-center gap-4 px-6 py-3.5">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-ink">
-                    {g.description || 'Lead convertido'}
+                    {g.campaign?.title || g.description || 'Ganho'}
                   </p>
                   <p className="truncate text-xs text-ink/45">
-                    {new Date(g.created_at).toLocaleDateString('pt-BR')}
+                    {/* earned_date é o dia de competência do acúmulo; ganhos
+                        antigos, por lead, não têm e caem no created_at. */}
+                    {new Date(g.earned_date || g.created_at).toLocaleDateString('pt-BR', {
+                      timeZone: 'UTC',
+                    })}
+                    {g.screen_ms > 0 &&
+                      ` · ${(g.screen_ms / 3_600_000).toLocaleString('pt-BR', {
+                        maximumFractionDigits: 1,
+                      })} h de tela`}
                     {g.paid_at &&
                       ` · pago em ${new Date(g.paid_at).toLocaleDateString('pt-BR')}`}
                   </p>

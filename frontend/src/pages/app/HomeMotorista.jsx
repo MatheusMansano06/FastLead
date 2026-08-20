@@ -239,7 +239,11 @@ export default function HomeMotorista() {
   // foi creditado. Antes eram somados das campanhas aceitas — quem ganhou por
   // uma campanha que já saiu do tablet via R$ 0,00 mesmo tendo recebido.
   const totalGanhos = carteira?.total ?? null;
-  const totalLeads = carteira?.leadsConvertidos ?? null;
+  // O que gera renda agora é tempo de tela: o motorista recebe por hora
+  // exibida, escaneando alguém o QR ou não. Leads seguem visíveis porque são o
+  // resultado que ele entrega ao anunciante, mas não são mais o que paga.
+  const horasDeTela = carteira?.horasDeTela ?? null;
+  const totalLeads = carteira?.leadsGerados ?? null;
   const totalScans = mine?.reduce((s, c) => s + Number(c.scans || 0), 0) ?? 0;
 
   /**
@@ -446,7 +450,7 @@ export default function HomeMotorista() {
               </button>
             </div>
 
-            <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-5">
               <Stat
                 icone="ganhos"
                 label="Ganhos acumulados"
@@ -454,10 +458,20 @@ export default function HomeMotorista() {
                 hint="já creditado na sua carteira"
               />
               <Stat
+                icone="ganhos"
+                label="Horas de tela"
+                value={
+                  horasDeTela == null
+                    ? '—'
+                    : `${horasDeTela.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} h`
+                }
+                hint="é o que remunera você"
+              />
+              <Stat
                 icone="leads"
-                label="Leads convertidos"
+                label="Leads gerados"
                 value={totalLeads == null ? '—' : totalLeads}
-                hint="clientes que a empresa fechou"
+                hint="contatos que saíram do seu tablet"
               />
               <Stat
                 icone="scans"
@@ -557,7 +571,7 @@ export default function HomeMotorista() {
                 Empresas buscando parceiros
               </h1>
               <p className="mt-1 text-sm text-ink/55">
-                Escolha quais anúncios você quer rodar no seu tablet. Você ganha por lead gerado.
+                Escolha quais anúncios você quer rodar no seu tablet. Você ganha por hora de tela exibida.
               </p>
             </div>
 
@@ -841,7 +855,7 @@ export default function HomeMotorista() {
             <h3 className="font-grotesk text-lg font-bold text-ink">Tirar este anúncio?</h3>
             <p className="mt-2 text-sm text-ink/60">
               <span className="font-semibold text-ink">{confirmarRemocao.title}</span> para de
-              aparecer no seu tablet e você deixa de ganhar por lead dele. A vaga volta para outro
+              aparecer no seu tablet e você deixa de ganhar tempo de tela dele. A vaga volta para outro
               motorista — para rodar de novo, você precisa aceitar quando reaparecer.
             </p>
             <div className="mt-5 flex gap-2">

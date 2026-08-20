@@ -35,9 +35,9 @@ export const AUTH_THEMES = {
     eyebrow: 'Área do motorista',
     title: 'Renda extra que anda com você.',
     subtitle:
-      'Acompanhe seus ganhos por lead, o status do tablet e seus repasses — tudo enquanto você roda a cidade.',
+      'Acompanhe seus ganhos por hora de tela, o status do tablet e seus repasses — tudo enquanto você roda a cidade.',
     bullets: [
-      'Ganhe por lead convertido em cada corrida',
+      'Ganhe por hora de anúncio exibido, escaneando ou não',
       'Tablet FastLead no banco de trás, pronto pra rodar',
       'Relatório mensal de acessos e repasses no app',
     ],

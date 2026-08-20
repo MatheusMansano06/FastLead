@@ -84,7 +84,7 @@ export default function SiteFooter() {
               Quero faturar com as corridas
             </h3>
             <p className="mt-2.5 text-[14px] leading-relaxed text-white/55">
-              O tablet roda no banco de trás e você ganha por lead convertido, com
+              O tablet roda no banco de trás e você ganha por hora de tela exibida, com
               relatório no app.
             </p>
             <div className="mt-6 flex flex-wrap gap-2.5">

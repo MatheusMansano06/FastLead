@@ -397,7 +397,7 @@ export default function Landing() {
               passos: [
                 ['Adquira o Kit Renda Extra', 'Tablet, suporte e chip. Instala no encosto do banco e pareia com um código.'],
                 ['Escolha o que exibe', 'O marketplace mostra as campanhas disponíveis para o seu perfil. É o seu carro — você aceita ou recusa.'],
-                ['Receba por lead', 'O ganho é registrado no momento da conversão e fica visível no app, corrida a corrida.'],
+                ['Receba por tempo de tela', 'O ganho é creditado conforme o anúncio roda, por hora exibida, e fica visível no app corrida a corrida.'],
               ],
             },
           ].map((trilho) => (
@@ -442,7 +442,7 @@ export default function Landing() {
               <ul className="mt-7 grid gap-3 sm:grid-cols-2">
                 {[
                   'Anúncios em carrossel, funciona offline',
-                  'Ganho registrado na conversão',
+                  'Ganho por hora de tela, não por conversão',
                   'Relatório mensal no app',
                   'Indique outro motorista e ganhe',
                   'Você aceita ou recusa cada campanha',
