@@ -19,7 +19,7 @@ const LINKS = [
 ];
 
 /** WhatsApp comercial. Formato wa.me: 55 (BR) + 19 (DDD) + número, só dígitos. */
-export const WHATSAPP_NUMERO = '5519987207888';
+export const WHATSAPP_NUMERO = '5519997292504';
 
 const WHATSAPP =
   `https://wa.me/${WHATSAPP_NUMERO}?text=` +
