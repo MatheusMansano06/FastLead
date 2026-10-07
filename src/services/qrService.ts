@@ -11,6 +11,15 @@ import logger from '../config/logger';
  * O parâmetro `m` (motorista) atribui o scan a quem estava rodando,
  * e `d` (device) identifica o tablet específico.
  */
+/**
+ * O QR é função pura da URL, e o tablet pede a playlist a cada poucos minutos
+ * pedindo o mesmo (campanha, motorista, tablet). Gerar o PNG de 512px de novo
+ * é CPU à toa. Teto de entradas para a memória não crescer com a frota; ao
+ * encher descartamos a mais antiga (o Map preserva a ordem de inserção).
+ */
+const CACHE_MAX = 2000;
+const qrCache = new Map<string, string>();
+
 export class QRService {
   /** Monta a URL rastreável que vai dentro do QR. */
   static buildTrackingUrl(campaignId: string, motoristaId?: string, deviceId?: string): string {
@@ -33,12 +42,17 @@ export class QRService {
     try {
       const qrUrl = QRService.buildTrackingUrl(campaignId, motoristaId, deviceId);
 
-      const qrCodeImage = await QRCode.toDataURL(qrUrl, {
-        errorCorrectionLevel: 'M', // M basta e deixa o QR menos denso -> lê de mais longe
-        margin: 2,
-        width: 512, // Passageiro fica a ~1m do tablet; QR grande lê mais rápido
-        color: { dark: '#0B1D3A', light: '#FFFFFF' },
-      });
+      let qrCodeImage = qrCache.get(qrUrl);
+      if (!qrCodeImage) {
+        qrCodeImage = await QRCode.toDataURL(qrUrl, {
+          errorCorrectionLevel: 'M', // M basta e deixa o QR menos denso -> lê de mais longe
+          margin: 2,
+          width: 512, // Passageiro fica a ~1m do tablet; QR grande lê mais rápido
+          color: { dark: '#0B1D3A', light: '#FFFFFF' },
+        });
+        if (qrCache.size >= CACHE_MAX) qrCache.delete(qrCache.keys().next().value!);
+        qrCache.set(qrUrl, qrCodeImage);
+      }
 
       return { qrCodeData: qrUrl, qrCodeImageUrl: qrCodeImage };
     } catch (error) {
