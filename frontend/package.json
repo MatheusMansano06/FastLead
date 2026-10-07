@@ -15,9 +15,6 @@
     "start": "serve -s dist"
   },
   "dependencies": {
-    "@react-three/drei": "^10.7.7",
-    "@react-three/fiber": "^9.6.1",
-    "@react-three/postprocessing": "^3.0.4",
     "@tailwindcss/postcss": "^4.3.2",
     "autoprefixer": "^10.5.2",
     "axios": "^1.18.1",
@@ -29,7 +26,6 @@
     "react-router-dom": "^7.18.1",
     "serve": "^14.2.6",
     "tailwindcss": "^4.3.2",
-    "three": "^0.185.1",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
