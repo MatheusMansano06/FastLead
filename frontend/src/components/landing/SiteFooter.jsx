@@ -153,7 +153,7 @@ export default function SiteFooter() {
             className="inline-flex items-center gap-2 text-white/70 no-underline transition hover:text-white"
           >
             <IconWhats className="h-4 w-4 text-[#25D366]" />
-            (19) 98720-7888
+            (19) 99729-2504
           </a>
         </div>
 
