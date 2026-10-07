@@ -10,19 +10,12 @@ import authRoutes from './routes/auth';
 import driverRoutes from './routes/driver';
 import advertiserRoutes from './routes/advertiser';
 import adminRoutes from './routes/admin';
-import campaignsRoutes from './routes/campaigns';
-import paymentsRoutes from './routes/payments';
 import tabletRoutes from './routes/tablet';
 import publicRoutes from './routes/public';
 import billingRoutes from './routes/billing';
 import driverBankRoutes from './routes/driver-bank';
 import driverWalletRoutes from './routes/driver-wallet';
 import webhookMercadopagoRoutes from './routes/webhook-mercadopago';
-
-// Remove old routes that aren't needed
-// import leadsRoutes from './routes/leads';
-// import analyticsRoutes from './routes/analytics';
-// import paymentRoutes from './routes/payment';
 
 const app = express();
 
@@ -66,8 +59,6 @@ app.use('/tablet', tabletRoutes);
 app.use('/driver', driverRoutes);
 app.use('/advertiser', advertiserRoutes);
 app.use('/admin', adminRoutes);
-app.use('/campaigns', campaignsRoutes);
-app.use('/payments', paymentsRoutes);
 app.use('/billing', billingRoutes);
 app.use('/driver', driverBankRoutes);
 app.use('/driver', driverWalletRoutes);
