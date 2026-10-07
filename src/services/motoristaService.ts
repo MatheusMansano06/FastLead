@@ -127,27 +127,23 @@ export class MotoristaService {
       _sum: { amount: true, leads_count: true },
     });
 
-    const campaignDetails = await Promise.all(
-      campaignEarnings
-        .filter((ce) => ce.campaign_id !== null)
-        .map(async (ce) => {
-          const campaign = await prisma.campaign.findUnique({
-            where: { id: ce.campaign_id! },
-            select: {
-              id: true,
-              title: true,
-              image_url: true,
-            },
-          });
-          return {
-            campaignId: ce.campaign_id,
-            campaignTitle: campaign?.title,
-            campaignImage: campaign?.image_url,
-            earnings: ce._sum.amount?.toString() || '0',
-            leads: ce._sum.leads_count || 0,
-          };
-        })
-    );
+    const comGanho = campaignEarnings.filter((ce) => ce.campaign_id !== null);
+    const campanhas = await prisma.campaign.findMany({
+      where: { id: { in: comGanho.map((ce) => ce.campaign_id!) } },
+      select: { id: true, title: true, image_url: true },
+    });
+    const campanhaPorId = new Map(campanhas.map((c) => [c.id, c]));
+
+    const campaignDetails = comGanho.map((ce) => {
+      const campaign = campanhaPorId.get(ce.campaign_id!);
+      return {
+        campaignId: ce.campaign_id,
+        campaignTitle: campaign?.title,
+        campaignImage: campaign?.image_url,
+        earnings: ce._sum.amount?.toString() || '0',
+        leads: ce._sum.leads_count || 0,
+      };
+    });
 
     return {
       totalEarnings: motorista.total_earnings.toString(),
@@ -200,35 +196,38 @@ export class MotoristaService {
       },
     });
 
-    // Get leads count for each campaign
-    const campaignData = await Promise.all(
-      campaigns.map(async (cm) => {
-        const leadsCount = await prisma.lead.count({
-          where: {
-            campaign_id: cm.campaign_id,
-            motorista_id: motorista.id,
-            status: 'CONVERTED',
-          },
-        });
+    // Leads convertidos por campanha numa query só, em vez de um count por vínculo.
+    const leadsPorCampanha = await prisma.lead.groupBy({
+      by: ['campaign_id'],
+      where: {
+        campaign_id: { in: campaigns.map((cm) => cm.campaign_id) },
+        motorista_id: motorista.id,
+        status: 'CONVERTED',
+      },
+      _count: { _all: true },
+    });
+    const leadsPorId = new Map(leadsPorCampanha.map((l) => [l.campaign_id, l._count._all]));
 
-        return {
-          id: cm.campaign.id,
-          title: cm.campaign.title,
-          company: cm.campaign.anunciante?.company_name,
-          image: cm.campaign.image_url,
-          pricePerLead: cm.campaign.price_per_lead?.toString(),
-          qrCode: cm.campaign.qr_code_image_url,
-          status: cm.campaign.status,
-          startDate: cm.campaign.start_date,
-          endDate: cm.campaign.end_date,
-          scans: cm.scans_count,
-          leads: leadsCount,
-          earnings: (
-            leadsCount * parseFloat(cm.campaign.price_per_lead?.toString() || '0')
-          ).toString(),
-        };
-      })
-    );
+    const campaignData = campaigns.map((cm) => {
+      const leadsCount = leadsPorId.get(cm.campaign_id) ?? 0;
+
+      return {
+        id: cm.campaign.id,
+        title: cm.campaign.title,
+        company: cm.campaign.anunciante?.company_name,
+        image: cm.campaign.image_url,
+        pricePerLead: cm.campaign.price_per_lead?.toString(),
+        qrCode: cm.campaign.qr_code_image_url,
+        status: cm.campaign.status,
+        startDate: cm.campaign.start_date,
+        endDate: cm.campaign.end_date,
+        scans: cm.scans_count,
+        leads: leadsCount,
+        earnings: (
+          leadsCount * parseFloat(cm.campaign.price_per_lead?.toString() || '0')
+        ).toString(),
+      };
+    });
 
     return campaignData;
   }

@@ -37,29 +37,48 @@ export class TrackingService {
    * Esta é a métrica de DIVULGAÇÃO: conta gente que leu, mesmo sem cadastro.
    */
   static async recordScan(ctx: ScanContext) {
-    const campaign = await prisma.campaign.findFirst({
-      where: { id: ctx.campaignId, deleted_at: null },
-      select: {
-        id: true,
-        company_id: true,
-        title: true,
-        destination_url: true,
-        status: true,
-      },
-    });
+    // As cinco leituras são independentes entre si: em série eram cinco idas ao
+    // banco com o passageiro esperando o redirect. Sessão e scan anterior não
+    // dependem de a campanha existir — se não existir, a resposta é 404 de
+    // qualquer jeito e o resultado delas é descartado.
+    const visitor_hash = this.visitorHash(ctx.campaignId, ctx.ip, ctx.userAgent);
+    const [campaign, motorista, sessao, previous] = await Promise.all([
+      prisma.campaign.findFirst({
+        where: { id: ctx.campaignId, deleted_at: null },
+        select: {
+          id: true,
+          company_id: true,
+          title: true,
+          destination_url: true,
+          status: true,
+        },
+      }),
+      ctx.motoristaId
+        ? prisma.motoristProfile.findUnique({
+            where: { id: ctx.motoristaId },
+            select: { id: true },
+          })
+        : null,
+      // Atribui o scan à jornada aberta do tablet que exibiu o anúncio. É isso
+      // que permite dizer "nesta jornada você gerou N leads".
+      ctx.deviceId
+        ? prisma.tabletSession.findFirst({
+            where: { device_id: ctx.deviceId, ended_at: null },
+            orderBy: { started_at: 'desc' },
+            select: { id: true },
+          })
+        : null,
+      prisma.scanEvent.findFirst({
+        where: { campaign_id: ctx.campaignId, visitor_hash },
+        select: { id: true },
+      }),
+    ]);
 
     if (!campaign) throw new NotFoundError('Campanha não encontrada');
 
     // O motorista do parâmetro precisa existir; se não existir seguimos sem
     // atribuição em vez de perder o scan — o alcance aconteceu de qualquer forma.
-    let motoristaId: string | null = null;
-    if (ctx.motoristaId) {
-      const m = await prisma.motoristProfile.findUnique({
-        where: { id: ctx.motoristaId },
-        select: { id: true },
-      });
-      motoristaId = m?.id ?? null;
-    }
+    const motoristaId = motorista?.id ?? null;
 
     // Sem motorista identificado não há como gravar ScanEvent (motorista_id é
     // obrigatório no modelo). Nesse caso só redirecionamos.
@@ -68,22 +87,6 @@ export class TrackingService {
       return { campaign, scanEventId: null, redirectTo: this.destinationFor(campaign, null) };
     }
 
-    // Atribui o scan à jornada aberta do tablet que exibiu o anúncio. É isso
-    // que permite dizer "nesta jornada você gerou N leads".
-    const sessao = ctx.deviceId
-      ? await prisma.tabletSession.findFirst({
-          where: { device_id: ctx.deviceId, ended_at: null },
-          orderBy: { started_at: 'desc' },
-          select: { id: true },
-        })
-      : null;
-
-    const visitor_hash = this.visitorHash(ctx.campaignId, ctx.ip, ctx.userAgent);
-
-    const previous = await prisma.scanEvent.findFirst({
-      where: { campaign_id: campaign.id, visitor_hash },
-      select: { id: true },
-    });
     const is_unique = !previous;
 
     const scan = await prisma.scanEvent.create({
@@ -103,23 +106,25 @@ export class TrackingService {
     });
 
     // Contadores denormalizados só para leitura rápida — a fonte da verdade
-    // continua sendo a tabela ScanEvent.
-    if (is_unique) {
-      await prisma.campaign.update({
-        where: { id: campaign.id },
-        data: { unique_scans: { increment: 1 } },
-      });
-    }
-    await prisma.campaignMotorista
-      .update({
-        where: {
-          campaign_id_motorista_id: { campaign_id: campaign.id, motorista_id: motoristaId },
-        },
-        data: { scans_count: { increment: 1 } },
-      })
-      .catch(() => {
-        /* motorista pode ter saído da campanha; o ScanEvent já ficou registrado */
-      });
+    // continua sendo a tabela ScanEvent. Não seguram o redirect: se falharem,
+    // o ScanEvent já está gravado e o passageiro segue para o destino.
+    void Promise.all([
+      is_unique
+        ? prisma.campaign.update({
+            where: { id: campaign.id },
+            data: { unique_scans: { increment: 1 } },
+          })
+        : null,
+      // motorista pode ter saído da campanha; o ScanEvent já ficou registrado
+      prisma.campaignMotorista
+        .update({
+          where: {
+            campaign_id_motorista_id: { campaign_id: campaign.id, motorista_id: motoristaId },
+          },
+          data: { scans_count: { increment: 1 } },
+        })
+        .catch(() => null),
+    ]).catch((err) => logger.error(`Falha ao atualizar contadores do scan ${scan.id}: ${err}`));
 
     logger.info(`Scan ${is_unique ? 'único' : 'repetido'} campanha=${campaign.id}`);
 
