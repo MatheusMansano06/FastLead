@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import config from './config/config';
 import { requestLogger, errorHandler } from './middleware';
 
@@ -28,9 +29,14 @@ const app = express();
 // Trust proxy
 app.set('trust proxy', 1);
 
-// Body parser middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
+// Gzip nas respostas: a playlist do tablet leva banner e QR em base64 e vai por 4G.
+app.use(compression());
+
+// Body parser middleware. O banner chega como data-URL já redimensionada no
+// navegador (lado maior 1280px, JPEG), então 2mb sobra; 10mb só abria a porta
+// para quem quisesse encher a memória do servidor.
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ limit: '100kb', extended: true }));
 
 // CORS middleware
 app.use(
